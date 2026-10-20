@@ -5,6 +5,7 @@ signal time_changed(phase: int, day_number: int, season: int)
 signal raid_started(wave_number: int)
 signal raid_cleared(day_number: int)
 signal new_day_started(day_number: int)
+signal raid_progress(remaining: int, total: int)
 
 @export var day_number: int = 1
 @export var current_phase: int = WindfallTypes.TimeOfDay.MORNING
@@ -17,6 +18,8 @@ var enemies_left_to_spawn: int = 0
 var _spawn_timer: float = 0.0
 
 @onready var night_overlay: CanvasModulate = get_node_or_null("../NightModulate") as CanvasModulate
+@onready var lighting: DayLighting = get_node_or_null("../DayLighting") as DayLighting
+var raid_total: int = 0
 
 
 func _ready() -> void:
@@ -52,6 +55,8 @@ func start_night_raid() -> void:
 	# Raid scales with day number
 	var count := 3 + int(day_number * 1.5)
 	enemies_left_to_spawn = count
+	raid_total = count
+	raid_progress.emit(count, count)
 	_spawn_timer = 1.0
 	raid_started.emit(day_number)
 
@@ -68,21 +73,13 @@ func _process_raid_spawning(delta: float) -> void:
 		if active_raid_enemies.is_empty():
 			is_raid_active = false
 			raid_cleared.emit(day_number)
-			# Auto advance to next morning
-			get_tree().create_timer(3.0).timeout.connect(start_next_day)
 
 
 func _spawn_raid_enemy() -> void:
 	var enemy := PoacherEnemy2D.new()
 	# Random spawn location around edges of orchard
-	var spawn_points := [
-		Vector2(100, 200),
-		Vector2(850, 200),
-		Vector2(100, 600),
-		Vector2(850, 600),
-		Vector2(450, 50)
-	]
-	enemy.position = spawn_points[randi() % spawn_points.size()]
+	var spawn_points: Array = WorldLayout.RAID_SPAWNS
+	enemy.position = spawn_points[randi() % spawn_points.size()] + Vector2(randf_range(-30, 30), randf_range(-20, 20))
 
 	# Mix poachers and gnawers
 	if randf() < 0.4:
@@ -96,11 +93,14 @@ func _spawn_raid_enemy() -> void:
 
 	enemy.died.connect(_on_enemy_died)
 	active_raid_enemies.append(enemy)
-	get_parent().add_child(enemy)
+	var parent: Node = FX.world if FX.world else get_parent()
+	parent.add_child(enemy)
+	FX.poof(enemy.global_position + Vector2(0, -10), WPal.CLOTH_PLUM[3])
 
 
 func _on_enemy_died(enemy: PoacherEnemy2D) -> void:
 	active_raid_enemies.erase(enemy)
+	raid_progress.emit(active_raid_enemies.size() + enemies_left_to_spawn, raid_total)
 
 
 func start_next_day() -> void:
@@ -140,15 +140,25 @@ func _tick_orchard_daily() -> void:
 
 
 func _update_lighting() -> void:
+	if lighting:
+		lighting.set_phase(current_phase)
+		return
 	if night_overlay == null:
 		return
 	match current_phase:
 		WindfallTypes.TimeOfDay.MORNING:
-			# Warm morning golden sunlight
 			night_overlay.color = Color(1.0, 0.98, 0.92)
 		WindfallTypes.TimeOfDay.EXPEDITION:
-			# Crisp afternoon light
 			night_overlay.color = Color(1.0, 1.0, 1.0)
 		WindfallTypes.TimeOfDay.NIGHT_RAID:
-			# Dark dramatic twilight navy
 			night_overlay.color = Color(0.35, 0.38, 0.6)
+
+
+## Restore from a save without replaying transitions.
+func restore(day: int, phase: int, season: int) -> void:
+	day_number = day
+	current_phase = phase
+	current_season = season
+	if lighting:
+		lighting.set_phase(phase, true)
+	time_changed.emit(current_phase, day_number, current_season)

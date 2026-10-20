@@ -1,6 +1,10 @@
 extends Control
 class_name WindfallHUD
 
+## The in-game HUD: vitals, clock & gold, the Stomach Terrarium, tools &
+## quickroot, prompts, toasts, banners, the bite moment, dialogue and menus.
+## Built in code on top of the shared Theme so it stays one cohesive kit.
+
 signal advance_phase_requested
 signal open_market_requested
 signal open_codex_requested
@@ -9,355 +13,543 @@ signal open_satchel_requested
 @export var player: RootbornPlayer
 @export var day_manager: DayCycleManager
 @export var market: MarketManager
+var lighting: DayLighting
+var main: Node
+var is_bound: bool = false
 
-var _juice_splash_timer: float = 0.0
-var _splash_color: Color = Color.TRANSPARENT
-var _splash_text: String = ""
-var _splash_text_timer: float = 0.0
-
-# Panels
+# kept for API compatibility with the original HUD
 var is_market_open: bool = false
 var is_codex_open: bool = false
 var is_satchel_open: bool = false
 
+var _hp_bar: PixelBar
+var _hp_label: Label
+var _st_bar: PixelBar
+var _clock_icon: TextureRect
+var _clock_label: Label
+var _season_icon: TextureRect
+var _season_label: Label
+var _phase_label: Label
+var _gold_label: Label
+var _raid_chip: PanelContainer
+var _raid_label: Label
+var _quest_box: PanelContainer
+var _quest_title: Label
+var _quest_label: Label
+var _stomach: StomachJar
+var _snacks: HBoxContainer
+var _tool_slots: Array[Button] = []
+var _seed_icon: TextureRect
+var _seed_label: Label
+var _prompt: HBoxContainer
+var _prompt_label: Label
+var _toasts: VBoxContainer
+var _banner: VBoxContainer
+var _banner_title: Label
+var _banner_sub: Label
+var _banner_tween: Tween
+var _splash: TextureRect
+var _fade: ColorRect
+var _dialogue: DialogueBoxW
+var _menu_root: Control
+var _menu: Control = null
+var _menu_name: String = ""
+var _displayed_gold: float = 0.0
+
 
 func _ready() -> void:
-	if player != null:
-		player.stomach_changed.connect(queue_redraw)
-		player.satchel_changed.connect(queue_redraw)
-		player.health_updated.connect(func(_c, _m): queue_redraw())
-		player.energy_updated.connect(func(_c, _m): queue_redraw())
-		player.tool_changed.connect(func(_t): queue_redraw())
-		player.bite_taken.connect(_on_player_bite)
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	theme = load("res://assets/ui/windfall_theme.tres")
+	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_build()
 
-	if day_manager != null:
-		day_manager.time_changed.connect(func(_p, _d, _s): queue_redraw())
-		day_manager.raid_started.connect(func(_w): queue_redraw())
-		day_manager.raid_cleared.connect(func(_d): queue_redraw())
 
-	if market != null:
-		market.gold_changed.connect(func(_g): queue_redraw())
+func bind() -> void:
+	is_bound = true
+	player.stomach_changed.connect(_refresh_stomach)
+	player.satchel_changed.connect(_refresh_satchel)
+	player.health_updated.connect(_on_health)
+	player.energy_updated.connect(func(c, m): _st_bar.max_value = m; _st_bar.value = c)
+	player.tool_changed.connect(func(_t): _refresh_tools())
+	player.bite_taken.connect(_on_player_bite)
+	day_manager.time_changed.connect(func(_p, _d, _s): _refresh_clock())
+	day_manager.raid_started.connect(func(_w): _raid_chip.visible = true)
+	day_manager.raid_cleared.connect(func(_d): _raid_chip.visible = false)
+	day_manager.raid_progress.connect(func(r, _t): _raid_label.text = "%d left" % r)
+	QuestManager.quest_accepted.connect(func(_q): _refresh_quest())
+	QuestManager.quest_objective_updated.connect(func(_q, _i): _refresh_quest(true))
+	QuestManager.quest_completed.connect(func(_q): _refresh_quest(true))
+	_displayed_gold = market.gold
+	_on_health(player.current_health, player.max_health)
+	_refresh_stomach()
+	_refresh_satchel()
+	_refresh_tools()
+	_refresh_clock()
+	_refresh_quest()
 
+
+# ── layout ──────────────────────────────────────────────────────────────────
+
+func _build() -> void:
+	# juice splash sits under everything
+	_splash = TextureRect.new()
+	_splash.texture = Art.glow_texture()
+	_splash.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_splash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_splash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var add := CanvasItemMaterial.new()
+	add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_splash.material = add
+	_splash.modulate.a = 0.0
+	add_child(_splash)
+
+	# top-left vitals
+	var vit := UIKit.panel("DarkPanel")
+	vit.position = Vector2(16, 14)
+	add_child(vit)
+	var vb := UIKit.vbox(4)
+	vit.add_child(vb)
+	var hp_row := UIKit.hbox(6)
+	hp_row.add_child(UIKit.icon("icons/heart", 30))
+	_hp_bar = _make_bar("ui/bar_hp", 210)
+	hp_row.add_child(_hp_bar)
+	_hp_label = UIKit.bold("120", 15)
+	_hp_label.custom_minimum_size.x = 40
+	hp_row.add_child(_hp_label)
+	vb.add_child(hp_row)
+	var st_row := UIKit.hbox(6)
+	st_row.add_child(UIKit.icon("icons/bolt", 30))
+	_st_bar = _make_bar("ui/bar_stamina", 160)
+	st_row.add_child(_st_bar)
+	vb.add_child(st_row)
+
+	# top-right clock / season / phase / gold
+	var tr := UIKit.hbox(8)
+	add_child(tr)
+	UIKit.pin(tr, Control.PRESET_TOP_RIGHT)
+	_raid_chip = _chip_box("icons/skull")
+	_raid_label = _raid_chip.get_meta("label")
+	_raid_chip.visible = false
+	tr.add_child(_raid_chip)
+	var clock := _chip_box("icons/sun")
+	_clock_icon = clock.get_meta("icon")
+	_clock_label = clock.get_meta("label")
+	tr.add_child(clock)
+	var season := _chip_box("icons/season_0")
+	_season_icon = season.get_meta("icon")
+	_season_label = season.get_meta("label")
+	tr.add_child(season)
+	var gold := _chip_box("icons/coin")
+	_gold_label = gold.get_meta("label")
+	_gold_label.add_theme_color_override("font_color", UITheme.GOLD)
+	tr.add_child(gold)
+	_phase_label = UIKit.label("", 14, UITheme.CREAM_DIM)
+	_phase_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	add_child(_phase_label)
+	UIKit.pin(_phase_label, Control.PRESET_TOP_RIGHT, Vector2(20, 66))
+
+	# quest tracker under the clock
+	_quest_box = UIKit.panel("DarkPanel")
+	_quest_box.custom_minimum_size.x = 300
+	var qv := UIKit.vbox(2)
+	_quest_title = UIKit.bold("", 14, UITheme.GOLD)
+	_quest_label = UIKit.label("", 14)
+	_quest_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_quest_label.custom_minimum_size.x = 280
+	qv.add_child(_quest_title)
+	qv.add_child(_quest_label)
+	_quest_box.add_child(qv)
+	_quest_box.visible = false
+	add_child(_quest_box)
+	UIKit.pin(_quest_box, Control.PRESET_TOP_RIGHT, Vector2(16, 96))
+
+	# bottom-left stomach terrarium + snacks
+	var bl := UIKit.vbox(4)
+	add_child(bl)
+	UIKit.pin(bl, Control.PRESET_BOTTOM_LEFT)
+	_stomach = StomachJar.new()
+	bl.add_child(_stomach)
+
+	# bottom-right tools + quickroot + snacks
+	var br := UIKit.panel("DarkPanel")
+	add_child(br)
+	UIKit.pin(br, Control.PRESET_BOTTOM_RIGHT)
+	var brv := UIKit.vbox(6)
+	br.add_child(brv)
+	var snack_row := UIKit.hbox(6)
+	snack_row.add_child(UIKit.icon("icons/satchel", 30))
+	_snacks = UIKit.hbox(4)
+	snack_row.add_child(_snacks)
+	snack_row.add_child(UIKit.spacer(0, 0, true))
+	snack_row.add_child(UIKit.keycap("I"))
+	brv.add_child(snack_row)
+	var tools := UIKit.hbox(4)
+	for i in 5:
+		var b := UIKit.slot_button("icons/tool_%d" % i, UIKit.TOOL_NAMES[i], 50)
+		b.focus_mode = Control.FOCUS_NONE
+		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_tool_slots.append(b)
+		tools.add_child(b)
+	brv.add_child(tools)
+	var tool_hint := UIKit.hbox(6)
+	tool_hint.add_child(UIKit.keycap("Tab"))
+	tool_hint.add_child(UIKit.label("Tool", 14, UITheme.CREAM_DIM))
+	tool_hint.add_child(UIKit.spacer(0, 0, true))
+	_seed_icon = UIKit.icon("icons/seed_0", 30)
+	tool_hint.add_child(_seed_icon)
+	_seed_label = UIKit.bold("x0", 14)
+	tool_hint.add_child(_seed_label)
+	tool_hint.add_child(UIKit.keycap("F"))
+	brv.add_child(tool_hint)
+
+	# interaction prompt (bottom centre)
+	_prompt = UIKit.hbox(8)
+	_prompt.add_child(UIKit.keycap("E", 16))
+	_prompt_label = UIKit.bold("", 17)
+	_prompt.add_child(_prompt_label)
+	_prompt.visible = false
+	add_child(_prompt)
+	UIKit.pin(_prompt, Control.PRESET_CENTER_BOTTOM, Vector2(0, 170))
+
+	# toasts (left middle)
+	_toasts = UIKit.vbox(4)
+	_toasts.position = Vector2(18, 110)
+	add_child(_toasts)
+
+	# banners (top centre)
+	_banner = UIKit.vbox(0)
+	_banner.custom_minimum_size = Vector2(700, 0)
+	var plate := TextureRect.new()
+	plate.texture = Art.glow_texture()
+	plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	plate.modulate = Color(0.06, 0.03, 0.08, 0.75)
+	plate.position = Vector2(50, -40)
+	plate.size = Vector2(600, 170)
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	plate.show_behind_parent = true
+	_banner_title = UIKit.header("", 40)
+	_banner_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_banner_sub = UIKit.bold("", 18)
+	_banner_sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_banner.add_child(_banner_title)
+	_banner.add_child(_banner_sub)
+	_banner.add_child(plate)
+	plate.top_level = false
+	_banner.modulate.a = 0.0
+	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_banner)
+	UIKit.pin(_banner, Control.PRESET_CENTER_TOP, Vector2(0, 130))
+
+	_dialogue = DialogueBoxW.new()
+	_dialogue.closed.connect(_on_dialogue_closed)
+	add_child(_dialogue)
+	UIKit.pin(_dialogue, Control.PRESET_CENTER_BOTTOM, Vector2(0, 24))
+
+	_menu_root = Control.new()
+	_menu_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_menu_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_menu_root)
+
+	_fade = ColorRect.new()
+	_fade.color = Color("0e0a14")
+	_fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_fade.modulate.a = 0.0
+	add_child(_fade)
+
+
+func _make_bar(fill: String, w: int) -> PixelBar:
+	return PixelBar.new(fill, w)
+
+
+func _chip_box(icon_path: String) -> PanelContainer:
+	var p := UIKit.panel("DarkPanel")
+	var h := UIKit.hbox(6)
+	var ic := UIKit.icon(icon_path, 30)
+	var l := UIKit.bold("", 16)
+	h.add_child(ic)
+	h.add_child(l)
+	p.add_child(h)
+	p.set_meta("icon", ic)
+	p.set_meta("label", l)
+	return p
+
+
+# ── refresh ─────────────────────────────────────────────────────────────────
 
 func _process(delta: float) -> void:
-	if _juice_splash_timer > 0.0:
-		_juice_splash_timer -= delta
-		queue_redraw()
+	if not is_bound:
+		return
+	# rolling gold counter
+	if absf(_displayed_gold - market.gold) > 0.5:
+		_displayed_gold = lerpf(_displayed_gold, market.gold, minf(delta * 8.0, 1.0))
+	else:
+		_displayed_gold = market.gold
+	_gold_label.text = str(int(round(_displayed_gold)))
+	if lighting:
+		_clock_label.text = "Day %d · %s" % [day_manager.day_number, lighting.hour_string()]
+	_stomach.update_timers(player)
+	_update_prompt()
 
-	if _splash_text_timer > 0.0:
-		_splash_text_timer -= delta
-		queue_redraw()
+
+func _on_health(c: float, m: float) -> void:
+	var dropped := c < _hp_bar.value
+	_hp_bar.max_value = m
+	_hp_bar.value = c
+	_hp_label.text = str(int(ceil(c)))
+	if dropped:
+		var t := _hp_bar.create_tween()
+		_hp_bar.modulate = Color(2, 1.2, 1.2)
+		t.tween_property(_hp_bar, "modulate", Color.WHITE, 0.25)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("open_satchel"):
-		is_satchel_open = not is_satchel_open
-		is_market_open = false
-		is_codex_open = false
-		queue_redraw()
-	elif event.is_action_pressed("open_codex"):
-		is_codex_open = not is_codex_open
-		is_market_open = false
-		is_satchel_open = false
-		queue_redraw()
+func _refresh_clock() -> void:
+	var phase := day_manager.current_phase
+	_clock_icon.texture = Art.tex(["icons/sun", "icons/sunset", "icons/moon"][phase])
+	_season_icon.texture = Art.tex("icons/season_%d" % day_manager.current_season)
+	_season_label.text = WindfallTypes.Season.keys()[day_manager.current_season].capitalize()
+	_phase_label.text = ["Morning Tending", "Expedition", "Night Raid"][phase]
+	_phase_label.add_theme_color_override("font_color", [UITheme.CREAM_DIM, UITheme.GOLD, WPal.RED[4]][phase])
 
+
+func _refresh_stomach() -> void:
+	_stomach.rebuild(player)
+
+
+func _refresh_satchel() -> void:
+	for c in _snacks.get_children():
+		c.queue_free()
+	for i in 3:
+		var slot := Control.new()
+		slot.custom_minimum_size = Vector2(40, 40)
+		var bg := UIKit.icon("ui/slot_0", 40)
+		slot.add_child(bg)
+		if i < player.satchel_fruits.size():
+			var f := player.satchel_fruits[i]
+			var ic := UIKit.icon("icons/fruit_%d" % int(f.get("family", 0)), 28)
+			ic.position = Vector2(6, 5)
+			slot.add_child(ic)
+		var k := UIKit.bold(str(i + 1), 12, UITheme.CREAM_DIM)
+		k.position = Vector2(2, 22)
+		slot.add_child(k)
+		_snacks.add_child(slot)
+	var fam := int(FruitRegistry.get_species(player.selected_seed_id).get("family", 0))
+	_seed_icon.texture = Art.tex("icons/seed_%d" % fam)
+	_seed_label.text = "x%d" % int(player.satchel_seeds.get(player.selected_seed_id, 0))
+	if _menu and _menu.has_method("refresh"):
+		_menu.call("refresh")
+
+
+func _refresh_tools() -> void:
+	for i in _tool_slots.size():
+		var sel := i == player.current_tool
+		var b := _tool_slots[i]
+		b.add_theme_stylebox_override("normal", UITheme.box("ui/slot_1" if sel else "ui/slot_0", 15, 6))
+		b.modulate = Color.WHITE if sel else Color(0.75, 0.72, 0.7)
+		if sel:
+			b.pivot_offset = b.size * 0.5
+			var t := b.create_tween()
+			b.scale = Vector2(1.18, 1.18)
+			t.tween_property(b, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK)
+		else:
+			b.scale = Vector2.ONE
+
+
+func _refresh_quest(pulse: bool = false) -> void:
+	var q: QuestData = null
+	for aq in QuestManager.active_quests:
+		q = aq
+	_quest_box.visible = q != null
+	if q == null:
+		return
+	_quest_title.text = "%s  (%d/%d)" % [q.title, q.current_objective_idx, q.objectives.size()]
+	_quest_label.text = "▸ " + q.objectives[mini(q.current_objective_idx, q.objectives.size() - 1)]
+	if pulse:
+		_quest_box.pivot_offset = _quest_box.size * 0.5
+		_quest_box.modulate = Color(1.4, 1.3, 0.9)
+		var t := _quest_box.create_tween()
+		t.tween_property(_quest_box, "modulate", Color.WHITE, 0.5)
+
+
+func _update_prompt() -> void:
+	var target: Node = player.get_interactable() if player else null
+	var text := ""
+	if target != null and is_instance_valid(target) and _menu == null and not _dialogue.visible:
+		if target.has_method("get_prompt"):
+			text = target.call("get_prompt")
+	_prompt.visible = text != ""
+	_prompt_label.text = text
+
+
+# ── the bite moment ─────────────────────────────────────────────────────────
 
 func _on_player_bite(fruit_data: Dictionary) -> void:
 	var fam: int = int(fruit_data.get("family", WindfallTypes.Family.STORM))
-	_splash_color = WindfallTypes.FAMILY_COLORS.get(fam, Color.YELLOW)
-	_juice_splash_timer = 0.38
-	_splash_text = "%s EATEN!\n%s BLOOMED ON HUD" % [fruit_data.get("name", "Fruit").to_upper(), fruit_data.get("skill_name", "SKILL").to_upper()]
-	_splash_text_timer = 2.0
-	queue_redraw()
+	var col := WPal.element(fam, 3)
+	# radial juice splash across the screen
+	_splash.modulate = Color(col.r, col.g, col.b, 0.0)
+	var t := _splash.create_tween()
+	t.tween_property(_splash, "modulate:a", 0.45, 0.05)
+	t.tween_property(_splash, "modulate:a", 0.0, 0.45)
+	var drops := CPUParticles2D.new()
+	drops.texture = Art.tex("fx/dot4")
+	drops.one_shot = true
+	drops.explosiveness = 1.0
+	drops.amount = 28
+	drops.lifetime = 0.8
+	drops.spread = 180.0
+	drops.initial_velocity_min = 300.0
+	drops.initial_velocity_max = 700.0
+	drops.gravity = Vector2(0, 900)
+	drops.scale_amount_min = 3.0
+	drops.scale_amount_max = 6.0
+	drops.color = col
+	drops.position = size * 0.5
+	add_child(drops)
+	move_child(drops, 1)
+	drops.emitting = true
+	drops.finished.connect(drops.queue_free)
+	banner(String(fruit_data.get("name", "Fruit")).to_upper(), "%s bloomed!" % fruit_data.get("skill_name", "Skill"), WPal.element(fam, 4), 1.6)
+	_stomach.bloom_last(col)
 
 
-func _draw() -> void:
-	if player == null:
+# ── toasts & banners ────────────────────────────────────────────────────────
+
+func toast(text: String, color: Color = Color.WHITE) -> void:
+	var p := UIKit.panel("DarkPanel")
+	var l := UIKit.bold(text, 15, color)
+	p.add_child(l)
+	_toasts.add_child(p)
+	p.modulate.a = 0.0
+	var t := p.create_tween()
+	t.tween_property(p, "modulate:a", 1.0, 0.15)
+	t.tween_interval(2.6)
+	t.tween_property(p, "modulate:a", 0.0, 0.4)
+	t.tween_callback(p.queue_free)
+	while _toasts.get_child_count() > 5:
+		_toasts.get_child(0).queue_free()
+		break
+
+
+func banner(title: String, sub: String, color: Color, hold: float = 2.2) -> void:
+	_banner_title.text = title
+	_banner_title.add_theme_color_override("font_color", color)
+	_banner_sub.text = sub
+	if _banner_tween and _banner_tween.is_valid():
+		_banner_tween.kill()
+	_banner.pivot_offset = Vector2(_banner.size.x * 0.5, 30)
+	_banner.scale = Vector2(1.25, 1.25)
+	_banner_tween = _banner.create_tween()
+	_banner_tween.set_parallel(true)
+	_banner_tween.tween_property(_banner, "modulate:a", 1.0, 0.18)
+	_banner_tween.tween_property(_banner, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_banner_tween.chain().tween_interval(hold)
+	_banner_tween.chain().tween_property(_banner, "modulate:a", 0.0, 0.5)
+
+
+# ── dialogue ────────────────────────────────────────────────────────────────
+
+func say(speaker: String, lines: Array, on_done: Callable = Callable()) -> void:
+	var d := DialogueData.new()
+	d.speaker_name = speaker
+	var typed: Array[String] = []
+	for l in lines:
+		typed.append(String(l))
+	d.lines = typed
+	_dialogue.open(d, on_done)
+	get_tree().paused = true
+
+
+func _on_dialogue_closed() -> void:
+	if _menu == null:
+		get_tree().paused = false
+
+
+# ── menus ───────────────────────────────────────────────────────────────────
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not is_bound or _dialogue.visible:
 		return
-
-	# 1. Health & Stamina (Top-Left)
-	_draw_bars()
-
-	# 2. Time, Season & Gold (Top-Right)
-	_draw_header()
-
-	# 3. Stomach Terrarium (Bottom-Left)
-	_draw_stomach_terrarium()
-
-	# 4. Tool & Quickroot Seed Wheel (Bottom-Right)
-	_draw_tool_and_quickroot()
-
-	# 5. Hero Bite Juice Splash Overlay
-	if _juice_splash_timer > 0.0:
-		_draw_juice_splash()
-
-	# 6. Hero Bite Text Banner
-	if _splash_text_timer > 0.0:
-		_draw_splash_text()
-
-	# 7. Modals (if toggled open)
-	if is_satchel_open:
-		_draw_satchel_modal()
-	elif is_market_open:
-		_draw_market_modal()
-	elif is_codex_open:
-		_draw_codex_modal()
-
-
-func _draw_bars() -> void:
-	var hp_w := 200.0
-	var hp_h := 14.0
-	var hp_pct := clampf(player.current_health / player.max_health, 0.0, 1.0)
-
-	# Health Background & Fill
-	draw_rect(Rect2(20, 20, hp_w, hp_h), Color(0.12, 0.12, 0.12, 0.85))
-	draw_rect(Rect2(20, 20, hp_w * hp_pct, hp_h), Color(0.85, 0.22, 0.22))
-	draw_rect(Rect2(20, 20, hp_w, hp_h), Color(0.3, 0.3, 0.3), false, 1.5)
-	draw_string(ThemeDB.fallback_font, Vector2(25, 31), "HP: %d/%d" % [int(player.current_health), int(player.max_health)], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color.WHITE)
-
-	# Energy / Stamina Bar
-	var en_w := 150.0
-	var en_h := 9.0
-	var en_pct := clampf(player.current_energy / player.max_energy, 0.0, 1.0)
-	draw_rect(Rect2(20, 38, en_w, en_h), Color(0.12, 0.12, 0.12, 0.85))
-	draw_rect(Rect2(20, 38, en_w * en_pct, en_h), Color(0.2, 0.8, 0.35))
-	draw_rect(Rect2(20, 38, en_w, en_h), Color(0.3, 0.3, 0.3), false, 1.5)
-
-
-func _draw_header() -> void:
-	var vp_w := get_viewport().get_visible_rect().size.x
-	var header_x := vp_w - 320.0
-
-	draw_rect(Rect2(header_x, 15, 305, 55), Color(0.1, 0.12, 0.14, 0.85))
-	draw_rect(Rect2(header_x, 15, 305, 55), Color(0.4, 0.35, 0.25), false, 1.5)
-
-	var season_name := "Spring"
-	if day_manager != null:
-		match day_manager.current_season:
-			WindfallTypes.Season.SUMMER: season_name = "Summer"
-			WindfallTypes.Season.AUTUMN: season_name = "Autumn"
-			WindfallTypes.Season.WINTER: season_name = "Winter"
-
-	var phase_str := "Morning Tending"
-	if day_manager != null:
-		match day_manager.current_phase:
-			WindfallTypes.TimeOfDay.EXPEDITION: phase_str = "Expedition"
-			WindfallTypes.TimeOfDay.NIGHT_RAID: phase_str = "NIGHT RAID!"
-
-	var day_num := day_manager.day_number if day_manager else 1
-	var gold_val := market.gold if market else 0
-
-	draw_string(ThemeDB.fallback_font, Vector2(header_x + 10, 34), "Day %d — %s (%s)" % [day_num, season_name, phase_str], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1, 0.9, 0.4))
-	draw_string(ThemeDB.fallback_font, Vector2(header_x + 10, 56), "Gold: %d G  |  [I] Satchel  [C] Codex" % [gold_val], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.9, 0.85, 0.7))
-
-
-# ── The Stomach Terrarium ──────────────────────────────────────────────────────
-
-func _draw_stomach_terrarium() -> void:
-	var vp_h := get_viewport().get_visible_rect().size.y
-	var base_x := 25.0
-	var base_y := vp_h - 110.0
-
-	# Terrarium Glass Vessel
-	var box_w := 290.0
-	var box_h := 88.0
-	draw_rect(Rect2(base_x, base_y, box_w, box_h), Color(0.08, 0.1, 0.12, 0.88))
-	draw_rect(Rect2(base_x, base_y, box_w, box_h), Color(0.25, 0.55, 0.5, 0.9), false, 2.0)
-	draw_string(ThemeDB.fallback_font, Vector2(base_x + 10, base_y - 6), "STOMACH (YOU ARE WHAT YOU EAT)", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.4, 0.8, 0.75))
-
-	var key_labels := ["[Q] Strike", "[R] Burst", "[T] Ward"]
-	var cur_x := base_x + 22.0
-
-	for slot_idx in player.max_stomach_slots:
-		# Slot bubble background
-		var slot_center := Vector2(cur_x + 18.0, base_y + 40.0)
-		draw_circle(slot_center, 22.0, Color(0.14, 0.16, 0.2, 0.9))
-		draw_arc(slot_center, 22.0, 0.0, TAU, 18, Color(0.3, 0.35, 0.4), 1.5)
-
-		if slot_idx < player.digesting_fruits.size():
-			var f := player.digesting_fruits[slot_idx]
-			var fam: int = int(f.get("family", 0))
-			var col: Color = WindfallTypes.FAMILY_COLORS.get(fam, Color.WHITE)
-
-			# Digestion progress arc (leaf curling)
-			var total_dur: float = float(f.get("digestion_duration", 50.0))
-			var rem_dur: float = float(f.get("remaining_duration", 10.0))
-			var pct := clampf(rem_dur / total_dur, 0.0, 1.0)
-			draw_arc(slot_center, 22.0, -PI * 0.5, -PI * 0.5 + (pct * TAU), 24, col, 3.5)
-
-			# Fruit icon circle inside
-			draw_circle(slot_center, 12.0, col)
-			draw_circle(slot_center, 6.0, Color.WHITE)
-
-			# Skill & key label
-			var key_name: String = key_labels[slot_idx] if slot_idx < key_labels.size() else "Passive"
-			draw_string(ThemeDB.fallback_font, Vector2(cur_x - 8, base_y + 75), key_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color.WHITE)
-			draw_string(ThemeDB.fallback_font, Vector2(cur_x - 8, base_y + 85), f.get("name", ""), HORIZONTAL_ALIGNMENT_LEFT, -1, 8, col)
+	if event.is_action_pressed("pause"):
+		if _menu != null:
+			close_menu()
 		else:
-			draw_string(ThemeDB.fallback_font, Vector2(cur_x + 6, base_y + 44), "Empty", HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.5, 0.5, 0.5))
-
-		cur_x += 64.0
-
-	# Pairings indicator banner
-	if not player.active_pairings.is_empty():
-		var pair_text := "PAIRING: "
-		for p in player.active_pairings:
-			match p:
-				WindfallTypes.PairingEffect.CONDUCTIVE: pair_text += "[CONDUCTIVE: 1.5x SHOCK] "
-				WindfallTypes.PairingEffect.FANNED_FLAME: pair_text += "[FANNED FLAME: SPREADING FIRE] "
-				WindfallTypes.PairingEffect.INDIGESTION: pair_text += "[INDIGESTION: -25% POWER CLASH] "
-				WindfallTypes.PairingEffect.SANCTUARY: pair_text += "[SANCTUARY BLOOM: REGEN] "
-		draw_string(ThemeDB.fallback_font, Vector2(base_x + 10, base_y + 102), pair_text, HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(1, 0.85, 0.3))
+			open_menu("pause")
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("open_satchel"):
+		_toggle("satchel")
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("open_codex"):
+		_toggle("codex")
+		get_viewport().set_input_as_handled()
+	elif _menu != null and event.is_action_pressed("ui_cancel"):
+		close_menu()
+		get_viewport().set_input_as_handled()
 
 
-func _draw_tool_and_quickroot() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	var base_x := vp.x - 220.0
-	var base_y := vp.y - 110.0
-
-	draw_rect(Rect2(base_x, base_y, 200, 88), Color(0.08, 0.1, 0.12, 0.88))
-	draw_rect(Rect2(base_x, base_y, 200, 88), Color(0.4, 0.35, 0.25), false, 1.5)
-
-	# Equipped Tool
-	var tool_names := ["Pruning Shears", "Scythe", "Hoe-Staff", "Seed Sling", "Watering Can"]
-	var t_name: String = tool_names[player.current_tool]
-	draw_string(ThemeDB.fallback_font, Vector2(base_x + 10, base_y + 22), "TOOL [Tab]:", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.8, 0.75, 0.6))
-	draw_string(ThemeDB.fallback_font, Vector2(base_x + 10, base_y + 40), t_name, HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.9, 0.4))
-
-	# Quickroot seed
-	var seed_name: String = FruitRegistry.get_species(player.selected_seed_id).get("name", "Seed")
-	var seed_count: int = player.satchel_seeds.get(player.selected_seed_id, 0)
-	draw_string(ThemeDB.fallback_font, Vector2(base_x + 10, base_y + 62), "QUICKROOT [F]:", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(0.4, 0.85, 0.4))
-	draw_string(ThemeDB.fallback_font, Vector2(base_x + 10, base_y + 78), "%s (x%d)" % [seed_name, seed_count], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.9, 0.95, 0.9))
-
-
-func _draw_juice_splash() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	var alpha: float = (_juice_splash_timer / 0.38) * 0.4
-	# Radial juice vignette
-	draw_circle(vp * 0.5, 340.0, Color(_splash_color.r, _splash_color.g, _splash_color.b, alpha))
-	# Splatter particles
-	for i in 12:
-		var angle: float = (float(i) / 12.0) * TAU
-		var s_pos := (vp * 0.5) + Vector2(cos(angle), sin(angle)) * (180.0 + sin(i * 3.0) * 80.0)
-		draw_circle(s_pos, 16.0, Color(_splash_color.r, _splash_color.g, _splash_color.b, alpha * 1.5))
-
-
-func _draw_splash_text() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	var alpha: float = minf(_splash_text_timer / 0.5, 1.0)
-	var banner_w := 460.0
-	var banner_h := 60.0
-	var b_x := (vp.x - banner_w) * 0.5
-	var b_y := 120.0
-
-	draw_rect(Rect2(b_x, b_y, banner_w, banner_h), Color(0.05, 0.05, 0.08, 0.88 * alpha))
-	draw_rect(Rect2(b_x, b_y, banner_w, banner_h), Color(_splash_color.r, _splash_color.g, _splash_color.b, alpha), false, 2.5)
-
-	var lines := _splash_text.split("\n")
-	draw_string(ThemeDB.fallback_font, Vector2(b_x + 20, b_y + 26), lines[0], HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1, 0.9, 0.2, alpha))
-	if lines.size() > 1:
-		draw_string(ThemeDB.fallback_font, Vector2(b_x + 20, b_y + 48), lines[1], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(_splash_color.r, _splash_color.g, _splash_color.b, alpha))
-
-
-# ── Modals: Satchel, Market, Codex ─────────────────────────────────────────────
-
-func _draw_satchel_modal() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	var m_w := 540.0
-	var m_h := 400.0
-	var m_x := (vp.x - m_w) * 0.5
-	var m_y := (vp.y - m_h) * 0.5
-
-	draw_rect(Rect2(m_x, m_y, m_w, m_h), Color(0.1, 0.12, 0.14, 0.95))
-	draw_rect(Rect2(m_x, m_y, m_w, m_h), Color(0.5, 0.4, 0.3), false, 2.0)
-	draw_string(ThemeDB.fallback_font, Vector2(m_x + 20, m_y + 30), "SATCHEL PROVISIONS (Press [1], [2], [3] to Eat)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1.0, 0.85, 0.4))
-
-	# Fresh fruit list
-	var y := m_y + 60.0
-	draw_string(ThemeDB.fallback_font, Vector2(m_x + 20, y), "Carried Fruit:", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.8, 0.8, 0.8))
-	y += 24.0
-
-	if player.satchel_fruits.is_empty():
-		draw_string(ThemeDB.fallback_font, Vector2(m_x + 30, y), "(Satchel is empty — harvest your orchard or forage wild trees)", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.5, 0.5, 0.5))
-		y += 24.0
+func _toggle(menu_name: String) -> void:
+	if _menu_name == menu_name:
+		close_menu()
 	else:
-		for i in mini(player.satchel_fruits.size(), 6):
-			var f := player.satchel_fruits[i]
-			var fam: int = int(f.get("family", 0))
-			var col: Color = WindfallTypes.FAMILY_COLORS.get(fam, Color.WHITE)
-			var rip_name: String = f.get("ripeness_name", "Ripe")
-			var trait_str := ""
-			if not f.get("traits", []).is_empty():
-				trait_str = " (" + ", ".join(f.get("traits")) + ")"
-			draw_string(ThemeDB.fallback_font, Vector2(m_x + 30, y), "[%d] %s (%s)%s — Grants: %s (%s)" % [i + 1, f.get("name"), rip_name, trait_str, f.get("skill_name"), f.get("flavor")], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, col)
-			y += 24.0
-
-	# Seed stock list
-	y += 20.0
-	draw_string(ThemeDB.fallback_font, Vector2(m_x + 20, y), "Carried Seeds (For Planting or [F] Quickroot):", HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.8, 0.8, 0.8))
-	y += 24.0
-
-	for sid in player.satchel_seeds.keys():
-		var count: int = player.satchel_seeds[sid]
-		if count > 0:
-			var s_data := FruitRegistry.get_species(sid)
-			var selected_tag := " [SELECTED]" if sid == player.selected_seed_id else ""
-			draw_string(ThemeDB.fallback_font, Vector2(m_x + 30, y), "• %s Seed x%d%s" % [s_data.get("name"), count, selected_tag], HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.7, 0.9, 0.7))
-			y += 22.0
+		open_menu(menu_name)
 
 
-func _draw_market_modal() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	var m_w := 540.0
-	var m_h := 380.0
-	var m_x := (vp.x - m_w) * 0.5
-	var m_y := (vp.y - m_h) * 0.5
-
-	draw_rect(Rect2(m_x, m_y, m_w, m_h), Color(0.1, 0.12, 0.14, 0.95))
-	draw_rect(Rect2(m_x, m_y, m_w, m_h), Color(0.9, 0.75, 0.2), false, 2.0)
-	draw_string(ThemeDB.fallback_font, Vector2(m_x + 20, m_y + 30), "HOMESTEAD MARKET STALL", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(1.0, 0.85, 0.3))
-
-	var y := m_y + 65.0
-	draw_string(ThemeDB.fallback_font, Vector2(m_x + 20, y), "Your Gold: %d G" % [market.gold if market else 0], HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color.WHITE)
-	y += 28.0
-
-	draw_string(ThemeDB.fallback_font, Vector2(m_x + 20, y), "Available Seed Stock & Upgrades:", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.8, 0.8, 0.8))
-	y += 24.0
-
-	var items := [
-		"Voltberry Seed — 25 G",
-		"Cinderapple Seed — 25 G",
-		"Rimepear Seed — 25 G",
-		"Briarcherry Seed — 22 G",
-		"Stomach Expansion (+1 Slot) — 200 G",
-		"Tool Upgrades (+Damage & Reach) — 100 G"
-	]
-	for it in items:
-		draw_string(ThemeDB.fallback_font, Vector2(m_x + 30, y), "• " + it, HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.85, 0.9, 0.95))
-		y += 24.0
+func open_menu(menu_name: String) -> void:
+	if _menu != null:
+		_menu.queue_free()
+	var m: Control
+	match menu_name:
+		"satchel": m = SatchelMenu.new()
+		"codex": m = CodexMenu.new()
+		"market": m = MarketMenu.new()
+		"pause": m = PauseMenuW.new()
+		_: return
+	m.set("hud", self)
+	_menu = m
+	_menu_name = menu_name
+	is_satchel_open = menu_name == "satchel"
+	is_codex_open = menu_name == "codex"
+	is_market_open = menu_name == "market"
+	_menu_root.add_child(m)
+	m.modulate.a = 0.0
+	m.scale = Vector2(0.96, 0.96)
+	var t := m.create_tween().set_parallel(true)
+	t.tween_property(m, "modulate:a", 1.0, 0.12)
+	t.tween_property(m, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	get_tree().paused = true
+	WindfallSound.play_ui_confirm()
 
 
-func _draw_codex_modal() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	var m_w := 640.0
-	var m_h := 440.0
-	var m_x := (vp.x - m_w) * 0.5
-	var m_y := (vp.y - m_h) * 0.5
+func close_menu() -> void:
+	if _menu != null:
+		_menu.queue_free()
+	_menu = null
+	_menu_name = ""
+	is_satchel_open = false
+	is_codex_open = false
+	is_market_open = false
+	get_tree().paused = false
+	WindfallSound.play_ui_back()
 
-	draw_rect(Rect2(m_x, m_y, m_w, m_h), Color(0.08, 0.1, 0.12, 0.96))
-	draw_rect(Rect2(m_x, m_y, m_w, m_h), Color(0.4, 0.75, 0.8), false, 2.0)
-	draw_string(ThemeDB.fallback_font, Vector2(m_x + 20, m_y + 30), "THE WINDFALL CODEX (32 SPECIES + HYBRIDS)", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color(0.4, 0.9, 0.85))
 
-	var y := m_y + 60.0
-	var count := 0
-	for sid in FruitRegistry.species.keys():
-		if count >= 12: break # Display sample set
-		var sp: Dictionary = FruitRegistry.species[sid]
-		var fam: int = int(sp.get("family", 0))
-		var col: Color = WindfallTypes.FAMILY_COLORS.get(fam, Color.WHITE)
-		draw_string(ThemeDB.fallback_font, Vector2(m_x + 25, y), "%s (%s) — Skill: %s | Flavor: %s" % [sp.get("name"), sp.get("skill_type"), sp.get("skill_name"), sp.get("flavor")], HORIZONTAL_ALIGNMENT_LEFT, -1, 10, col)
-		y += 24.0
-		count += 1
+func menu_open() -> bool:
+	return _menu != null or _dialogue.visible
 
-	draw_string(ThemeDB.fallback_font, Vector2(m_x + 25, m_y + m_h - 20), "Hybrids discoverable via adjacent cross-pollination in Spring!", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1, 0.85, 0.3))
+
+# ── sleep transition ────────────────────────────────────────────────────────
+
+func sleep_transition(on_black: Callable) -> void:
+	get_tree().paused = true
+	var zz := UIKit.header("z z z", 32, UITheme.CREAM_DIM)
+	zz.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	zz.modulate.a = 0.0
+	_fade.add_child(zz)
+	var t := create_tween()
+	t.tween_property(_fade, "modulate:a", 1.0, 0.8)
+	t.parallel().tween_property(zz, "modulate:a", 1.0, 0.8)
+	t.tween_callback(on_black)
+	t.tween_interval(0.9)
+	t.tween_property(zz, "modulate:a", 0.0, 0.3)
+	t.tween_callback(func(): get_tree().paused = false)
+	t.tween_property(_fade, "modulate:a", 0.0, 0.9)
+	t.tween_callback(zz.queue_free)

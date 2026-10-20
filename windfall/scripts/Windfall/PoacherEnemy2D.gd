@@ -36,6 +36,18 @@ var shock_timer: float = 0.0
 var _anim_time: float = 0.0
 var _flash_timer: float = 0.0
 
+# Presentation
+var body_sprite: Sprite2D
+var _hp_bar: Node2D
+var _knock: Vector2 = Vector2.ZERO
+var _eat_timer: float = 0.0
+var _hurt_timer: float = 0.0
+var _attack_anim: float = 0.0
+var _dying: bool = false
+var _next_crit: bool = false
+var _aura: Sprite2D
+var _status_timer: float = 0.0
+
 
 func _ready() -> void:
 	add_to_group("enemies")
@@ -46,21 +58,22 @@ func _ready() -> void:
 	shape.radius = 12.0
 	col.shape = shape
 	add_child(col)
+	_setup_visuals()
 
 
 func _physics_process(delta: float) -> void:
 	_anim_time += delta
+	if _dying:
+		return
 	_tick_statuses(delta)
-
 	if _flash_timer > 0.0:
 		_flash_timer -= delta
-		if _flash_timer <= 0.0:
-			modulate = Color.WHITE
+	_knock = _knock.move_toward(Vector2.ZERO, 900.0 * delta)
 
-	if shock_timer > 0.0:
-		velocity = Vector2.ZERO
+	if shock_timer > 0.0 or _eat_timer > 0.0:
+		velocity = _knock
 		move_and_slide()
-		queue_redraw()
+		_update_visuals(delta)
 		return
 
 	_update_targeting()
@@ -83,13 +96,14 @@ func _physics_process(delta: float) -> void:
 	else:
 		velocity = Vector2.ZERO
 
+	velocity += _knock
 	move_and_slide()
 
 	# Cast stolen fruit skill if poacher has eaten one!
 	if has_eaten_fruit:
 		_tick_stolen_skill(delta)
 
-	queue_redraw()
+	_update_visuals(delta)
 
 
 func _update_targeting() -> void:
@@ -131,6 +145,16 @@ func _eat_stolen_fruit() -> void:
 	eaten_skill_id = carried_fruit.get("species_id", &"voltberry")
 	eaten_family = int(carried_fruit.get("family", WindfallTypes.Family.STORM))
 	WindfallSound.play_bite(eaten_family)
+	_eat_timer = 0.9
+	var c := WPal.element(eaten_family, 3)
+	FX.element_burst(eaten_family, global_position + Vector2(0, -18), 1.2)
+	FX.popup("STOLEN!", global_position + Vector2(0, -48), c, 16)
+	_aura = FX.glow(self, c, 36.0, Vector2(0, -14), 0.4, 0.75)
+	var mat := body_sprite.material as ShaderMaterial
+	mat.set_shader_parameter("rim_count", 1)
+	mat.set_shader_parameter("rim_a", c)
+	mat.set_shader_parameter("rim_strength", 0.9)
+	fruit_stolen.emit(carried_fruit)
 	# Health boost from eating
 	current_health = minf(current_health + 30.0, max_health * 1.4)
 	# Now targets player aggressively!
@@ -153,7 +177,9 @@ func _tick_stolen_skill(delta: float) -> void:
 			proj.setup(dir, attack_damage * 1.5, eaten_family, 360.0)
 			# Flag so it hits player, not enemies
 			proj.remove_from_group("player_attacks")
+			proj.hostile = true
 			get_parent().add_child(proj)
+			_attack_anim = 0.25
 
 
 func _melee_attack_player(player: RootbornPlayer, delta: float) -> void:
@@ -162,15 +188,32 @@ func _melee_attack_player(player: RootbornPlayer, delta: float) -> void:
 		_attack_timer = 1.0
 		player.take_damage(attack_damage)
 		WindfallSound.play_hit()
+		_attack_anim = 0.25
 
 
 func take_damage(amount: float) -> void:
+	if _dying:
+		return
 	current_health -= amount
-	modulate = Color(2.0, 0.3, 0.3)
-	_flash_timer = 0.1
+	_flash_timer = 0.12
+	_hurt_timer = 0.18
+	FX.damage_number(amount, global_position + Vector2(0, -26), -1, _next_crit)
+	_next_crit = false
+	var players := get_tree().get_nodes_in_group("player")
+	if not players.is_empty():
+		var away: Vector2 = (global_position - (players[0] as Node2D).global_position).normalized()
+		_knock = away * 170.0
 
 	if current_health <= 0.0:
 		_die()
+
+
+func set_next_hit_crit(v: bool) -> void:
+	_next_crit = v
+
+
+func knockback(v: Vector2) -> void:
+	_knock = v
 
 
 func apply_status(status_name: String, dur: float) -> void:
@@ -218,36 +261,84 @@ func _die() -> void:
 			p.satchel_seeds[drop_sid] = p.satchel_seeds.get(drop_sid, 0) + 1
 		p.satchel_changed.emit()
 
+	_dying = true
 	died.emit(self)
-	queue_free()
-
-
-func _draw() -> void:
-	# Shadow
-	draw_circle(Vector2(0, 6), 9.0, Color(0, 0, 0, 0.25))
-
-	# Elemental stolen aura
+	EventBus.emit_unit_defeated(self, null)
+	remove_from_group("enemies")
+	collision_layer = 0
+	collision_mask = 0
+	if _hp_bar: _hp_bar.visible = false
+	WindfallSound.play_poof()
+	FX.shake(0.25)
 	if has_eaten_fruit:
-		var aura_col: Color = WindfallTypes.FAMILY_COLORS.get(eaten_family, Color.YELLOW)
-		draw_arc(Vector2.ZERO, 15.0 + sin(_anim_time * 8.0) * 2.0, 0.0, TAU, 16, aura_col, 2.5)
+		FX.element_burst(eaten_family, global_position + Vector2(0, -14), 1.4)
+	body_sprite.frame = Art.ROWS["collapse"] * 4
+	var t := create_tween()
+	t.tween_interval(0.16)
+	t.tween_callback(func(): body_sprite.frame = Art.ROWS["collapse"] * 4 + 1)
+	t.tween_interval(0.35)
+	t.tween_callback(func(): FX.poof(global_position + Vector2(0, -10)))
+	t.tween_property(self, "modulate:a", 0.0, 0.15)
+	t.tween_callback(queue_free)
 
-	# Body by type
-	match enemy_type:
-		EnemyType.GNAWER:
-			# Beetle shape
-			draw_circle(Vector2.ZERO, 9.0, Color(0.45, 0.25, 0.1))
-			draw_circle(Vector2(6, 0), 4.0, Color(0.2, 0.1, 0.05)) # Pincers
-		_:
-			# Poacher cloaked rogue
-			draw_circle(Vector2.ZERO, 11.0, Color(0.22, 0.2, 0.25)) # Dark cloak
-			draw_circle(Vector2(0, -4), 6.5, Color(0.15, 0.14, 0.16)) # Masked hood
-			draw_circle(Vector2(2, -4), 2.0, Color(0.9, 0.2, 0.2)) # Glowing red eyes
 
-	# Floating health bar
-	if current_health < max_health:
-		var bar_w := 24.0
-		var bar_h := 3.5
-		var bar_y := -18.0
-		draw_rect(Rect2(-bar_w * 0.5, bar_y, bar_w, bar_h), Color(0.1, 0.1, 0.1, 0.8))
-		var pct := clampf(current_health / max_health, 0.0, 1.0)
-		draw_rect(Rect2(-bar_w * 0.5, bar_y, bar_w * pct, bar_h), Color(0.9, 0.2, 0.2))
+# ── Presentation ───────────────────────────────────────────────────────────
+
+func _setup_visuals() -> void:
+	var gnawer := enemy_type == EnemyType.GNAWER
+	add_child(Art.shadow("small" if gnawer else "small"))
+	body_sprite = Art.actor_sprite("gnawer" if gnawer else "poacher")
+	add_child(body_sprite)
+	_hp_bar = Node2D.new()
+	_hp_bar.position = Vector2(0, -52 if not gnawer else -38)
+	_hp_bar.z_index = 30
+	_hp_bar.draw.connect(_draw_hp)
+	add_child(_hp_bar)
+	_hp_bar.visible = false
+
+
+func _draw_hp() -> void:
+	var w := 22.0
+	var pct := clampf(current_health / max_health, 0.0, 1.0)
+	_hp_bar.draw_rect(Rect2(-w * 0.5 - 1, -1, w + 2, 5), WPal.OUTLINE)
+	_hp_bar.draw_rect(Rect2(-w * 0.5, 0, w, 3), Color("2a1e24"))
+	_hp_bar.draw_rect(Rect2(-w * 0.5, 0, w * pct, 3), WPal.RED[3])
+	_hp_bar.draw_rect(Rect2(-w * 0.5, 0, w * pct, 1), WPal.RED[4])
+
+
+func _update_visuals(delta: float) -> void:
+	if _eat_timer > 0.0: _eat_timer -= delta
+	if _hurt_timer > 0.0: _hurt_timer -= delta
+	if _attack_anim > 0.0: _attack_anim -= delta
+	var v := velocity - _knock
+	var face := v if v.length() > 5.0 else (target_node.global_position - global_position if target_node and is_instance_valid(target_node) else Vector2.DOWN)
+	var dir := 2 if absf(face.x) > absf(face.y) * 1.1 else (1 if face.y < 0.0 else 0)
+	var anim := "walk" if v.length() > 10.0 else "idle"
+	if _eat_timer > 0.0: anim = "eat"
+	elif _hurt_timer > 0.0: anim = "hurt"
+	elif _attack_anim > 0.0: anim = "attack"
+	var fps := 10.0 if anim == "walk" else (8.0 if anim != "idle" else 3.0)
+	var count: int = Art.ROW_FRAMES[anim]
+	var f := int(_anim_time * fps) % count
+	body_sprite.frame = (Art.ROWS[anim] + dir) * 4 + f
+	body_sprite.flip_h = dir == 2 and face.x < 0.0
+	var mat := body_sprite.material as ShaderMaterial
+	mat.set_shader_parameter("flash", clampf(_flash_timer / 0.12, 0.0, 1.0))
+	# status tints
+	var tint := Color.WHITE
+	if chill_timer > 0.0: tint = Color(0.7, 0.92, 1.0)
+	if burn_timer > 0.0: tint = Color(1.0, 0.8, 0.65)
+	if shock_timer > 0.0 and int(_anim_time * 20.0) % 2 == 0: tint = Color(0.85, 0.75, 1.0)
+	body_sprite.self_modulate = tint
+	_status_timer -= delta
+	if _status_timer <= 0.0:
+		_status_timer = 0.3
+		if burn_timer > 0.0:
+			FX.burst(global_position + Vector2(0, -20), "fx/dot", WPal.element(1, 4), 3, 30.0, 0.6, Vector2(0, -60), 40.0, Vector2.UP, Vector2(1, 2), "overlay", Color(0, 0, 0, 0), true)
+		if is_wet:
+			FX.burst(global_position + Vector2(0, -16), "fx/dot", WPal.WATER[4], 2, 10.0, 0.5, Vector2(0, 80), 20.0, Vector2.DOWN, Vector2(1, 1), "world")
+		if shock_timer > 0.0:
+			FX.burst(global_position + Vector2(0, -18), "fx/spark", WPal.element(0, 4), 2, 60.0, 0.2, Vector2.ZERO, 180.0, Vector2.UP, Vector2(1, 1), "overlay", Color(0, 0, 0, 0), true)
+	_hp_bar.visible = current_health < max_health
+	if _hp_bar.visible:
+		_hp_bar.queue_redraw()

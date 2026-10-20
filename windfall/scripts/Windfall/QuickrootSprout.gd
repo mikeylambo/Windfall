@@ -9,6 +9,7 @@ class_name QuickrootSprout
 var _timer: float = 0.0
 var _pulse_timer: float = 0.0
 var _anim_time: float = 0.0
+var _sprite: Sprite2D
 
 func setup(p_species_id: StringName, p_family: int, p_power: float = 30.0, p_duration: float = 12.0) -> void:
 	species_id = p_species_id
@@ -26,29 +27,50 @@ func _ready() -> void:
 	shape.radius = 45.0
 	col.shape = shape
 	add_child(col)
+	add_child(Art.shadow("small"))
+	_sprite = Art.sprite("fx/quickroot_%d" % family, 1, 1, Vector2(24, 52))
+	_sprite.scale = Vector2(0.2, 0.0)
+	add_child(_sprite)
+	var t := _sprite.create_tween()
+	t.tween_property(_sprite, "scale", Vector2.ONE, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	FX.dust(global_position, 8)
+	FX.element_burst(family, global_position + Vector2(0, -10), 0.8)
+	FX.glow(self, WPal.element(family, 3), 34.0, Vector2(0, -32), 0.3, 0.8)
 
 
 func _process(delta: float) -> void:
 	_anim_time += delta
 	_timer -= delta
 	if _timer <= 0.0:
-		queue_free()
+		set_process(false)
+		FX.poof(global_position + Vector2(0, -10), WPal.element(family, 4))
+		var t := create_tween()
+		t.tween_property(_sprite, "scale", Vector2(1.2, 0.0), 0.2)
+		t.tween_callback(queue_free)
 		return
+	_sprite.skew = sin(_anim_time * 3.0) * 0.06
 
 	_pulse_timer -= delta
 	if _pulse_timer <= 0.0:
 		_pulse_timer = 1.4
 		_trigger_effect()
 
-	queue_redraw()
 
 
 func _trigger_effect() -> void:
 	WindfallSound.play_spell(family)
+	FX.ring(global_position, WPal.element(family, 3), 45.0, 0.4)
+	var squash := _sprite.create_tween()
+	squash.tween_property(_sprite, "scale", Vector2(1.15, 0.85), 0.06)
+	squash.tween_property(_sprite, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_BACK)
 	var targets := get_overlapping_bodies()
 	for body in targets:
 		if body.is_in_group("enemies") and body.has_method("take_damage"):
 			body.call("take_damage", power)
+			if family == WindfallTypes.Family.STORM:
+				FX.lightning(global_position + Vector2(0, -44), (body as Node2D).global_position + Vector2(0, -14), WPal.element(family, 3), 2.0)
+			else:
+				FX.element_burst(family, (body as Node2D).global_position + Vector2(0, -14), 0.5)
 			if body.has_method("apply_status"):
 				match family:
 					WindfallTypes.Family.STORM:
@@ -68,20 +90,3 @@ func _trigger_effect() -> void:
 				body.call("heal", power * 0.5)
 
 
-func _draw() -> void:
-	var color: Color = WindfallTypes.FAMILY_COLORS.get(family, Color.GREEN)
-	var wobble: float = sin(_anim_time * 6.0) * 3.0
-
-	# Ground stem & base
-	draw_circle(Vector2.ZERO, 10.0, Color(0.2, 0.4, 0.15))
-	draw_line(Vector2.ZERO, Vector2(wobble, -18.0), Color(0.25, 0.65, 0.2), 4.0)
-
-	# Glowing flower / fruit bloom
-	var bloom_radius: float = 9.0 + sin(_anim_time * 8.0) * 2.0
-	draw_circle(Vector2(wobble, -18.0), bloom_radius, color)
-	draw_circle(Vector2(wobble, -18.0), bloom_radius * 0.5, Color.WHITE)
-
-	# Pulse ring
-	var pulse_radius: float = 40.0 * (1.0 - (_pulse_timer / 1.4))
-	var alpha: float = (_pulse_timer / 1.4) * 0.4
-	draw_arc(Vector2.ZERO, pulse_radius, 0.0, TAU, 24, Color(color.r, color.g, color.b, alpha), 2.0)

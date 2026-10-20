@@ -37,5 +37,6 @@ func _create_wild_tree(pos: Vector2, species_id: StringName) -> void:
 	plot.planted_species_id = species_id
 	plot.fruit_count = 3
 	plot.current_ripeness = WindfallTypes.Ripeness.RIPE
+	plot.is_wild = true
 	plot.add_to_group("wild_trees")
 	add_child(plot)

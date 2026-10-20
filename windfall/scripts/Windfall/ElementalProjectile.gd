@@ -9,9 +9,15 @@ class_name ElementalProjectile
 @export var lifetime: float = 1.8
 @export var chain_count: int = 0
 
+## Fired by an enemy that ate stolen fruit: hits the player instead of enemies.
+var hostile: bool = false
+
 var direction: Vector2 = Vector2.RIGHT
 var targets_hit: Array[Node2D] = []
 var _anim_time: float = 0.0
+var _sprite: Sprite2D
+var _trail: CPUParticles2D
+var _dead: bool = false
 
 func setup(p_dir: Vector2, p_damage: float, p_family: int, p_speed: float = 420.0, p_splash: float = 0.0, p_pierce: bool = false, p_chains: int = 0) -> void:
 	direction = p_dir.normalized()
@@ -26,6 +32,7 @@ func setup(p_dir: Vector2, p_damage: float, p_family: int, p_speed: float = 420.
 
 func _ready() -> void:
 	monitoring = true
+	z_index = 8
 	var col := CollisionShape2D.new()
 	var shape := CircleShape2D.new()
 	shape.radius = 12.0
@@ -34,52 +41,106 @@ func _ready() -> void:
 
 	body_entered.connect(_on_body_entered)
 	area_entered.connect(_on_area_entered)
+	_build_visuals()
+
+
+func _build_visuals() -> void:
+	_sprite = Sprite2D.new()
+	_sprite.texture = Art.tex("fx/proj_%d" % family)
+	_sprite.position = Vector2(0, -12).rotated(-rotation)
+	add_child(_sprite)
+	if hostile:
+		_sprite.modulate = Color(1.0, 0.85, 0.85)
+	# element trail
+	_trail = CPUParticles2D.new()
+	_trail.local_coords = false
+	_trail.amount = 16
+	_trail.lifetime = 0.35
+	_trail.position = _sprite.position
+	_trail.gravity = Vector2.ZERO
+	_trail.initial_velocity_min = 5.0
+	_trail.initial_velocity_max = 20.0
+	_trail.spread = 180.0
+	var tex := "fx/dot4"
+	var grav := Vector2.ZERO
+	match family:
+		WindfallTypes.Family.STORM: tex = "fx/spark"
+		WindfallTypes.Family.EMBER: grav = Vector2(0, -80)
+		WindfallTypes.Family.FROST: tex = "fx/shard"
+		WindfallTypes.Family.VERDANT: tex = "fx/leaf"
+		WindfallTypes.Family.LUMEN: tex = "fx/spark"
+	_trail.texture = Art.tex(tex)
+	_trail.gravity = grav
+	var g := Gradient.new()
+	g.set_color(0, WPal.element(family, 4))
+	g.set_color(1, Color(WPal.element(family, 2), 0.0))
+	_trail.color_ramp = g
+	var m := CanvasItemMaterial.new()
+	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	_trail.material = m
+	add_child(_trail)
+	FX.glow(self, WPal.element(family, 3), 30.0, Vector2(0, -12), 0.45, 0.85)
 
 
 func _physics_process(delta: float) -> void:
+	if _dead:
+		return
 	_anim_time += delta
 	position += direction * speed * delta
 	lifetime -= delta
+	if _sprite and family == WindfallTypes.Family.STORM:
+		_sprite.scale = Vector2.ONE * (1.0 + sin(_anim_time * 40.0) * 0.15)
 	if lifetime <= 0.0:
-		queue_free()
-		return
-	queue_redraw()
+		_finish()
+
+
+func _can_hit(body: Node) -> bool:
+	if hostile:
+		return body.is_in_group("player")
+	return not body.is_in_group("player") and not body.is_in_group("allies")
 
 
 func _on_body_entered(body: Node2D) -> void:
-	if body.is_in_group("player") or targets_hit.has(body):
+	if _dead or not _can_hit(body) or targets_hit.has(body):
 		return
 
 	if body.has_method("take_damage"):
 		targets_hit.append(body)
 		_hit_target(body)
 
-		if chain_count > 0:
+		if chain_count > 0 and not hostile:
 			_chain_to_next(body)
 
 		if splash_radius > 0.0:
 			_explode_splash()
 
 		if not is_piercing:
-			queue_free()
+			_finish()
 
 
 func _on_area_entered(area: Area2D) -> void:
+	if _dead or hostile:
+		return
 	var p := area.get_parent()
 	if p != null and not p.is_in_group("player") and not targets_hit.has(p):
-		if p.has_method("take_damage"):
+		if p.has_method("take_damage") and p.is_in_group("enemies"):
 			targets_hit.append(p)
 			_hit_target(p)
 			if not is_piercing:
-				queue_free()
+				_finish()
 
 
 func _hit_target(target: Node2D) -> void:
 	var final_damage := damage
-	# Elemental interaction check
-	if target.has_method("is_wet") and target.call("is_wet") and family == WindfallTypes.Family.STORM:
-		final_damage *= 1.5 # Conductive bonus!
+	# Elemental interaction: Storm conducts through wet targets
+	var conductive := family == WindfallTypes.Family.STORM and bool(target.get("is_wet"))
+	if conductive:
+		final_damage *= 1.5
+		FX.popup("CONDUCTIVE!", target.global_position + Vector2(0, -56), WPal.element(family, 4), 13)
+	if target.has_method("set_next_hit_crit"):
+		target.call("set_next_hit_crit", conductive)
 	target.call("take_damage", final_damage)
+	EventBus.emit_damage_dealt(self, target, final_damage)
 
 	if target.has_method("apply_status"):
 		match family:
@@ -92,6 +153,8 @@ func _hit_target(target: Node2D) -> void:
 			WindfallTypes.Family.TIDE:
 				target.call("apply_status", "wet", 5.0)
 
+	FX.element_burst(family, target.global_position + Vector2(0, -14), 0.8)
+	FX.shake(0.12)
 	WindfallSound.play_hit()
 
 
@@ -108,14 +171,20 @@ func _chain_to_next(last_target: Node2D) -> void:
 				closest = enemy
 
 	if closest != null:
-		var chain_proj: ElementalProjectile = duplicate()
-		chain_proj.position = last_target.global_position
+		# the arc visibly leaps between targets, then a fresh bolt carries on
+		FX.lightning(last_target.global_position + Vector2(0, -14), closest.global_position + Vector2(0, -14), WPal.element(family, 3))
+		var chain_proj := ElementalProjectile.new()
+		chain_proj.position = closest.global_position - (closest.global_position - last_target.global_position).normalized() * 10.0
 		chain_proj.setup((closest.global_position - last_target.global_position).normalized(), damage * 0.85, family, speed, 0.0, false, chain_count - 1)
+		chain_proj.targets_hit = targets_hit.duplicate()
 		get_parent().add_child(chain_proj)
 		WindfallSound.play_spell(WindfallTypes.Family.STORM)
 
 
 func _explode_splash() -> void:
+	FX.ring(global_position, WPal.element(family, 3), splash_radius, 0.35)
+	FX.element_burst(family, global_position, 1.5)
+	FX.shake(0.28)
 	var enemies := get_tree().get_nodes_in_group("enemies")
 	for enemy in enemies:
 		if enemy is Node2D and not targets_hit.has(enemy):
@@ -124,43 +193,16 @@ func _explode_splash() -> void:
 					enemy.call("take_damage", damage * 0.6)
 
 
-func _draw() -> void:
-	var col: Color = WindfallTypes.FAMILY_COLORS.get(family, Color.YELLOW)
-	match family:
-		WindfallTypes.Family.STORM:
-			# Jagged lightning bolt
-			var pts := PackedVector2Array([
-				Vector2(-12, 0),
-				Vector2(-4, -5 + sin(_anim_time * 30.0) * 4.0),
-				Vector2(4, 5 + cos(_anim_time * 30.0) * 4.0),
-				Vector2(14, 0)
-			])
-			draw_polyline(pts, col, 3.5)
-			draw_circle(Vector2(14, 0), 4.0, Color.WHITE)
-		WindfallTypes.Family.EMBER:
-			# Molten fireball with flare
-			draw_circle(Vector2.ZERO, 9.0, col)
-			draw_circle(Vector2(-4, 0), 6.0, Color(1, 0.8, 0.2))
-			draw_circle(Vector2(2, 0), 4.0, Color.WHITE)
-		WindfallTypes.Family.FROST:
-			# Sharp diamond ice shard
-			var pts := PackedVector2Array([
-				Vector2(-10, 0),
-				Vector2(0, -6),
-				Vector2(14, 0),
-				Vector2(0, 6)
-			])
-			draw_colored_polygon(pts, col)
-			draw_polyline(pts, Color.WHITE, 1.5)
-		WindfallTypes.Family.TIDE:
-			# Water orb
-			draw_circle(Vector2.ZERO, 8.0, col)
-			draw_arc(Vector2.ZERO, 10.0, 0.0, TAU, 12, Color.WHITE, 2.0)
-		WindfallTypes.Family.LUMEN:
-			# Radiant beam projectile
-			draw_line(Vector2(-18, 0), Vector2(18, 0), Color.WHITE, 5.0)
-			draw_line(Vector2(-18, 0), Vector2(18, 0), col, 9.0)
-		_:
-			# Generic elemental bullet
-			draw_circle(Vector2.ZERO, 8.0, col)
-			draw_circle(Vector2.ZERO, 4.0, Color.WHITE)
+func _finish() -> void:
+	if _dead:
+		return
+	_dead = true
+	set_deferred("monitoring", false)
+	if _sprite:
+		_sprite.visible = false
+	if _trail:
+		_trail.emitting = false
+	FX.burst(global_position + Vector2(0, -12), "fx/dot", WPal.element(family, 4), 5, 50.0, 0.25)
+	var t := create_tween()
+	t.tween_interval(0.4)
+	t.tween_callback(queue_free)

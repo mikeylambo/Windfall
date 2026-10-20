@@ -8,6 +8,7 @@ signal health_updated(current: float, max_val: float)
 signal energy_updated(current: float, max_val: float)
 signal tool_changed(tool_type: int)
 signal quickroot_planted(species_id: StringName)
+signal skill_cast(fruit_data: Dictionary)
 
 @export var move_speed: float = 170.0
 @export var roll_speed: float = 350.0
@@ -55,6 +56,28 @@ var _eating_timer: float = 0.0
 var _damage_flash_timer: float = 0.0
 var _aura_color: Color = Color.TRANSPARENT
 
+# Presentation
+const ACCEL := 1500.0
+const DECEL := 1700.0
+const DIR_DOWN := 0
+const DIR_UP := 1
+const DIR_SIDE := 2
+var input_locked: bool = false
+var tool_level: int = 1
+var body_sprite: Sprite2D
+var tool_sprite: Sprite2D
+var _shadow: Sprite2D
+var _anim: String = "idle"
+var _anim_frame_time: float = 0.0
+var _anim_dir: int = DIR_DOWN
+var _cast_timer: float = 0.0
+var _hurt_timer: float = 0.0
+var _iframe_timer: float = 0.0
+var _dust_timer: float = 0.0
+var _ghost_timer: float = 0.0
+var _aura_glow: Sprite2D
+var _respawn_point: Vector2 = Vector2.ZERO
+
 @onready var interaction_detector: Area2D = $InteractionDetector if has_node("InteractionDetector") else null
 @onready var weapon_hitbox: Area2D = $WeaponHitbox if has_node("WeaponHitbox") else null
 var _current_interactable = null
@@ -67,6 +90,8 @@ func _ready() -> void:
 
 	_setup_collision()
 	_setup_default_satchel()
+	_setup_visuals()
+	_respawn_point = global_position
 
 	health_updated.emit(current_health, max_health)
 	energy_updated.emit(current_energy, max_energy)
@@ -136,8 +161,6 @@ func _physics_process(delta: float) -> void:
 
 	if _damage_flash_timer > 0.0:
 		_damage_flash_timer -= delta
-		if _damage_flash_timer <= 0.0:
-			modulate = Color.WHITE
 
 	if _eating_timer > 0.0:
 		_eating_timer -= delta
@@ -151,7 +174,6 @@ func _physics_process(delta: float) -> void:
 	if is_eating:
 		velocity = Vector2.ZERO
 		move_and_slide()
-		queue_redraw()
 		return
 
 	if is_rolling:
@@ -159,26 +181,27 @@ func _physics_process(delta: float) -> void:
 		move_and_slide()
 		# Motion fruit trail damage
 		_check_motion_fruit_trail()
-		queue_redraw()
 		return
 
 	if is_attacking:
 		velocity = velocity.move_toward(Vector2.ZERO, 900.0 * delta)
 		move_and_slide()
-		queue_redraw()
 		return
 
-	var input_vec := Input.get_vector("move_left", "move_right", "move_up", "move_down")
+	var input_vec := Vector2.ZERO
+	if not input_locked:
+		input_vec = Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	if input_vec != Vector2.ZERO:
 		facing_direction = input_vec.normalized()
-		velocity = input_vec * move_speed
+		velocity = velocity.move_toward(input_vec * move_speed, ACCEL * delta)
 		interaction_detector.position = facing_direction * 22.0
 	else:
-		velocity = velocity.move_toward(Vector2.ZERO, 1300.0 * delta)
+		velocity = velocity.move_toward(Vector2.ZERO, DECEL * delta)
 
 	move_and_slide()
-	_handle_input()
-	queue_redraw()
+	_refresh_interactable()
+	if not input_locked:
+		_handle_input()
 
 
 func _handle_input() -> void:
@@ -249,10 +272,11 @@ func eat_fruit(fruit_data: Dictionary) -> bool:
 	mastery_xp[sid] = minf(mastery_xp.get(sid, 0.0) + m_gain, 100.0)
 
 	_update_pairings()
+	_bite_feedback(fam)
 	bite_taken.emit(fruit_data)
 	stomach_changed.emit()
 
-	_eating_timer = 0.14
+	_eating_timer = 0.32
 	return true
 
 
@@ -349,6 +373,11 @@ func _cast_fruit_skill(fruit_index: int, skill_slot: int) -> void:
 
 	_skill_cooldowns[skill_slot] = cd
 	WindfallSound.play_spell(fam)
+	_cast_timer = 0.28
+	FX.element_burst(fam, global_position + facing_direction * 16.0 + Vector2(0, -14), 0.7)
+	FX.shake(0.12)
+	EventBus.emit_ability_used(self, null, fruit.get("skill_name", ""))
+	skill_cast.emit(fruit)
 
 	# Execute specific skill logic
 	_execute_skill(sid, fam, stype, dmg)
@@ -415,6 +444,9 @@ func _execute_skill(sid: StringName, fam: int, stype: int, dmg: float) -> void:
 
 
 func _burst_shockwave(dmg: float, radius: float, fam: int, knockback: float = 240.0) -> void:
+	FX.ring(global_position, WPal.element(fam, 3), radius, 0.4)
+	FX.element_burst(fam, global_position, 1.3)
+	FX.shake(0.3)
 	var enemies := get_tree().get_nodes_in_group("enemies")
 	for enemy in enemies:
 		if enemy is Node2D and global_position.distance_to(enemy.global_position) <= radius:
@@ -422,7 +454,10 @@ func _burst_shockwave(dmg: float, radius: float, fam: int, knockback: float = 24
 				enemy.call("take_damage", dmg)
 			if enemy is CharacterBody2D:
 				var away: Vector2 = (enemy.global_position - global_position).normalized()
-				(enemy as CharacterBody2D).velocity = away * knockback
+				if enemy.has_method("knockback"):
+					enemy.call("knockback", away * knockback)
+				else:
+					(enemy as CharacterBody2D).velocity = away * knockback
 
 
 func _check_motion_fruit_trail() -> void:
@@ -444,6 +479,8 @@ func _start_tool_attack() -> void:
 	_attack_timer = 0.18
 	_attack_cd_timer = 0.32
 	WindfallSound.play_swing()
+	_anim_frame_time = 0.0
+	_play_swing_fx()
 
 	match current_tool:
 		WindfallTypes.ToolType.PRUNING_SHEARS:
@@ -502,10 +539,19 @@ func _on_weapon_hit_body(body: Node2D) -> void:
 		var dmg := 28.0
 		if current_tool == WindfallTypes.ToolType.SCYTHE: dmg = 36.0
 		elif current_tool == WindfallTypes.ToolType.HOE_STAFF: dmg = 44.0
+		dmg *= 1.0 + (tool_level - 1) * 0.2
+		var crit := randf() < 0.12
+		if crit:
+			dmg *= 1.75
+		if body.has_method("set_next_hit_crit"):
+			body.call("set_next_hit_crit", crit)
 		body.call("take_damage", dmg)
+		EventBus.emit_damage_dealt(self, body, dmg)
 		WindfallSound.play_hit()
-	if body is CharacterBody2D:
-		(body as CharacterBody2D).velocity = facing_direction * 220.0
+		FX.hitstop(0.05 if not crit else 0.09)
+		FX.shake(0.18 if not crit else 0.35)
+	if body.has_method("knockback"):
+		body.call("knockback", facing_direction * 240.0)
 
 
 func _on_weapon_hit_area(area: Area2D) -> void:
@@ -558,11 +604,20 @@ func take_damage(amount: float) -> void:
 			f["remaining_duration"] = 0.0 # Popped bubble
 			break
 
+	if amount <= 0.0:
+		FX.popup("BLOCKED", global_position + Vector2(0, -40), WPal.element(WindfallTypes.Family.TIDE, 3), 13)
+		return
 	current_health = maxf(current_health - amount, 0.0)
 	health_updated.emit(current_health, max_health)
 
-	modulate = Color(2.0, 0.4, 0.4)
-	_damage_flash_timer = 0.12
+	_damage_flash_timer = 0.14
+	_hurt_timer = 0.25
+	_iframe_timer = 0.5
+	is_invulnerable = true
+	FX.popup("-%d" % int(round(amount)), global_position + Vector2(0, -44), WPal.RED[4], 15)
+	FX.shake(0.35)
+	FX.hitstop(0.06)
+	WindfallSound.play_hurt()
 
 	if current_health <= 0.0:
 		_die()
@@ -584,10 +639,13 @@ func _die() -> void:
 			_burst_shockwave(60.0, 150.0, WindfallTypes.Family.EMBER)
 			return
 
-	# Handle normal death
+	# Handle normal death: wilt, then regrow at the farmhouse door
+	FX.poof(global_position, WPal.LEAF[4])
+	FX.element_burst(WindfallTypes.Family.VERDANT, global_position, 1.5)
+	FX.popup("WILTED...", global_position + Vector2(0, -50), WPal.CREAM[3], 18)
 	current_health = max_health
 	health_updated.emit(current_health, max_health)
-	global_position = Vector2(400, 300) # Respawn at orchard house
+	global_position = _respawn_point
 
 
 func _start_roll() -> void:
@@ -596,6 +654,9 @@ func _start_roll() -> void:
 	is_rolling = true
 	is_invulnerable = true
 	_roll_timer = roll_duration
+	_anim_frame_time = 0.0
+	FX.dust(global_position, 6)
+	WindfallSound.play_roll()
 	_roll_cd_timer = roll_cooldown
 
 
@@ -610,7 +671,8 @@ func _tick_cooldowns(delta: float) -> void:
 		_roll_timer -= delta
 		if _roll_timer <= 0.0:
 			is_rolling = false
-			is_invulnerable = false
+			is_invulnerable = _iframe_timer > 0.0
+			FX.dust(global_position, 3)
 
 	if is_attacking:
 		_attack_timer -= delta
@@ -625,58 +687,216 @@ func _tick_stamina(delta: float) -> void:
 		energy_updated.emit(current_energy, max_energy)
 
 
-func _on_interact_area_entered(area: Area2D) -> void:
-	if area.has_method("interact"):
-		_current_interactable = area
-		if area.has_method("set_focused"):
-			area.call("set_focused", true)
+func _on_interact_area_entered(_area: Area2D) -> void:
+	pass
 
 
-func _on_interact_area_exited(area: Area2D) -> void:
-	if area == _current_interactable:
-		if area.has_method("set_focused"):
-			area.call("set_focused", false)
-		_current_interactable = null
+func _on_interact_area_exited(_area: Area2D) -> void:
+	pass
 
 
-# ── Procedural Drawing ─────────────────────────────────────────────────────────
+## Focus the nearest interactable in reach (more forgiving than "last entered").
+func _refresh_interactable() -> void:
+	var best: Node = null
+	var best_d := INF
+	for a in interaction_detector.get_overlapping_areas():
+		if a.has_method("interact") and a.visible:
+			var d: float = (a as Node2D).global_position.distance_to(interaction_detector.global_position)
+			if d < best_d:
+				best_d = d
+				best = a
+	for b in interaction_detector.get_overlapping_bodies():
+		if b != self and b.has_method("interact"):
+			var d2: float = (b as Node2D).global_position.distance_to(interaction_detector.global_position)
+			if d2 < best_d:
+				best_d = d2
+				best = b
+	if best != _current_interactable:
+		if _current_interactable != null and is_instance_valid(_current_interactable) and _current_interactable.has_method("set_focused"):
+			_current_interactable.call("set_focused", false)
+		_current_interactable = best
+		if best != null and best.has_method("set_focused"):
+			best.call("set_focused", true)
 
-func _draw() -> void:
-	# 1. Elemental digestion aura radiating from Rootborn
-	if _aura_color != Color.TRANSPARENT:
-		var aura_pulse := 16.0 + sin(_anim_time * 6.0) * 3.0
-		draw_arc(Vector2.ZERO, aura_pulse, 0.0, TAU, 20, Color(_aura_color.r, _aura_color.g, _aura_color.b, 0.4), 3.0)
 
-	# 2. Shadow
-	draw_circle(Vector2(0, 8), 11.0, Color(0, 0, 0, 0.28))
+func get_interactable() -> Node:
+	return _current_interactable
 
-	# 3. Gardener's longcoat
-	var coat_col := Color(0.28, 0.44, 0.28) # Earthy gardener green
-	if is_rolling:
-		coat_col = Color(0.6, 0.85, 0.95, 0.7)
-	draw_circle(Vector2.ZERO, 13.0, coat_col)
 
-	# 4. Longcoat pockets & satchel on hip
-	draw_circle(Vector2(-9, 4), 4.5, Color(0.55, 0.35, 0.2)) # Brown satchel
+# ── Presentation ───────────────────────────────────────────────────────────
 
-	# 5. Head / Hat
-	draw_circle(Vector2(0, -5), 8.0, Color(0.85, 0.72, 0.55)) # Face
-	draw_arc(Vector2(0, -6), 9.0, PI, TAU, 12, Color(0.45, 0.35, 0.2), 3.0) # Brim
+func _setup_visuals() -> void:
+	add_to_group("saveable_player")
+	_shadow = Art.shadow("small")
+	add_child(_shadow)
+	body_sprite = Art.actor_sprite("rootborn")
+	add_child(body_sprite)
+	tool_sprite = Sprite2D.new()
+	tool_sprite.texture = Art.tex("icons/tool_0")
+	tool_sprite.scale = Vector2.ONE * (2.0 / 3.0)
+	tool_sprite.offset = Vector2(12, -12)
+	add_child(tool_sprite)
+	tool_changed.connect(func(t): tool_sprite.texture = Art.tex("icons/tool_%d" % t))
+	stomach_changed.connect(_refresh_aura)
+	call_deferred("_late_visuals")
 
-	# 6. Facing direction indicator / Tool in hands
-	var tool_offset := facing_direction * 14.0
-	match current_tool:
-		WindfallTypes.ToolType.PRUNING_SHEARS:
-			draw_line(tool_offset - Vector2(3, 3), tool_offset + Vector2(3, 3), Color(0.85, 0.85, 0.9), 2.5)
-			draw_line(tool_offset - Vector2(3, -3), tool_offset + Vector2(3, -3), Color(0.85, 0.85, 0.9), 2.5)
-		WindfallTypes.ToolType.SCYTHE:
-			draw_arc(tool_offset, 12.0, facing_direction.angle() - 1.0, facing_direction.angle() + 1.0, 8, Color(0.9, 0.9, 0.95), 3.0)
-		WindfallTypes.ToolType.WATERING_CAN:
-			draw_circle(tool_offset, 5.0, Color(0.3, 0.6, 0.85))
-		_:
-			draw_circle(tool_offset, 4.0, Color(0.95, 0.85, 0.4))
 
-	# 7. Attack swing slash arc
+func _late_visuals() -> void:
+	_aura_glow = FX.glow(self, Color.WHITE, 46.0, Vector2(0, -16), 0.35, 0.0)
+	_refresh_aura()
+
+
+func _refresh_aura() -> void:
+	var mat := body_sprite.material as ShaderMaterial
+	var n := mini(digesting_fruits.size(), 3)
+	mat.set_shader_parameter("rim_count", n)
+	mat.set_shader_parameter("rim_strength", 0.85 if n > 0 else 0.0)
+	var keys := ["rim_a", "rim_b", "rim_c"]
+	for i in n:
+		mat.set_shader_parameter(keys[i], WPal.element(int(digesting_fruits[i].get("family", 0)), 3))
+	if _aura_glow:
+		_aura_glow.modulate = _aura_color if n > 0 else Color(0, 0, 0, 0)
+		FX.set_glow_offset(_aura_glow, Vector2(0, -16))
+		for g in FX._glows:
+			if is_instance_valid(g.sprite) and g.sprite == _aura_glow:
+				g.base_alpha = 0.55 if n > 0 else 0.0
+
+
+func _process(delta: float) -> void:
+	_anim_frame_time += delta
+	if _cast_timer > 0.0: _cast_timer -= delta
+	if _hurt_timer > 0.0: _hurt_timer -= delta
+	if _iframe_timer > 0.0:
+		_iframe_timer -= delta
+		if _iframe_timer <= 0.0 and not is_rolling:
+			is_invulnerable = false
+
+	var moving := velocity.length() > 20.0
+	var dir := _dir_from(facing_direction)
+	var anim := "idle"
+	if is_rolling: anim = "roll"
+	elif _hurt_timer > 0.0: anim = "hurt"
+	elif is_eating: anim = "eat"
+	elif _cast_timer > 0.0: anim = "cast"
+	elif is_attacking: anim = "attack"
+	elif moving: anim = "walk"
+	if anim != _anim:
+		_anim = anim
+		_anim_frame_time = 0.0
+	_anim_dir = dir
+
+	var fps := {"idle": 2.5, "walk": 9.0, "attack": 16.0, "roll": 18.0, "eat": 8.0, "cast": 7.0, "hurt": 1.0}
+	var count: int = Art.ROW_FRAMES[anim]
+	var f := int(_anim_frame_time * fps.get(anim, 6.0))
+	f = mini(f, count - 1) if anim == "attack" else f % count
+	var row: int = Art.ROWS[anim] + (0 if anim == "roll" else dir)
+	body_sprite.frame = row * 4 + f
+	body_sprite.flip_h = dir == DIR_SIDE and facing_direction.x < 0.0
+	if anim == "roll":
+		body_sprite.flip_h = facing_direction.x < 0.0
+
+	# tool held in hand, swung during attacks
+	tool_sprite.visible = not is_rolling and not is_eating and _cast_timer <= 0.0
+	var side := -1.0 if body_sprite.flip_h else 1.0
+	tool_sprite.flip_h = side < 0.0
+	tool_sprite.offset = Vector2(12 * side, -12)
+	tool_sprite.z_index = -1 if dir == DIR_UP else 1
+	var base_rot := 0.0
 	if is_attacking:
-		var angle := facing_direction.angle()
-		draw_arc(Vector2.ZERO, 30.0, angle - 0.9, angle + 0.9, 12, Color(1.0, 0.95, 0.5, 0.85), 3.5)
+		var t := clampf(_anim_frame_time / 0.18, 0.0, 1.0)
+		base_rot = lerpf(-1.6, 1.4, ease(t, 0.4)) * side
+	tool_sprite.rotation = base_rot
+	tool_sprite.position = Vector2(4 * side, -16) + (facing_direction * 6.0 if is_attacking else Vector2.ZERO)
+
+	# i-frame flicker
+	var flicker := (is_rolling or _iframe_timer > 0.0) and int(Time.get_ticks_msec() / 50) % 2 == 0
+	body_sprite.modulate.a = 0.45 if flicker else 1.0
+
+	# hit flash
+	(body_sprite.material as ShaderMaterial).set_shader_parameter("flash", clampf(_damage_flash_timer / 0.14, 0.0, 1.0))
+
+	# run dust & digesting afterimages
+	if moving and not is_rolling:
+		_dust_timer -= delta
+		if _dust_timer <= 0.0:
+			_dust_timer = 0.28
+			FX.dust(global_position + Vector2(0, -2), 2)
+	if not digesting_fruits.is_empty() and (moving or is_rolling):
+		_ghost_timer -= delta
+		if _ghost_timer <= 0.0:
+			_ghost_timer = 0.05 if is_rolling else 0.09
+			_spawn_afterimage()
+
+
+func _dir_from(v: Vector2) -> int:
+	if absf(v.x) > absf(v.y) * 1.1:
+		return DIR_SIDE
+	return DIR_UP if v.y < 0.0 else DIR_DOWN
+
+
+func _spawn_afterimage() -> void:
+	if FX.world == null:
+		return
+	var g := Sprite2D.new()
+	g.texture = body_sprite.texture
+	g.hframes = body_sprite.hframes
+	g.vframes = body_sprite.vframes
+	g.frame = body_sprite.frame
+	g.flip_h = body_sprite.flip_h
+	g.centered = false
+	g.offset = body_sprite.offset
+	var m := ShaderMaterial.new()
+	m.shader = Art.ACTOR_SHADER
+	m.set_shader_parameter("ghost", 0.38)
+	var idx := int(Time.get_ticks_msec() / 90) % mini(digesting_fruits.size(), 3)
+	m.set_shader_parameter("ghost_color", WPal.element(int(digesting_fruits[idx].get("family", 0)), 3))
+	g.material = m
+	g.z_index = -1
+	FX.world.add_child(g)
+	g.global_position = global_position
+	var t := g.create_tween()
+	t.tween_property(g, "modulate:a", 0.0, 0.28)
+	t.tween_callback(g.queue_free)
+
+
+func _play_swing_fx() -> void:
+	if FX.world == null or current_tool == WindfallTypes.ToolType.SEED_SLING:
+		return
+	var idx := 0
+	match current_tool:
+		WindfallTypes.ToolType.SCYTHE: idx = 1
+		WindfallTypes.ToolType.HOE_STAFF: idx = 2
+	if current_tool == WindfallTypes.ToolType.WATERING_CAN:
+		FX.burst(global_position + facing_direction * 30.0 + Vector2(0, -12), "fx/dot4", WPal.WATER[4], 14, 160.0, 0.45, Vector2(0, 200), 25.0, facing_direction, Vector2(0.8, 1.4), "world")
+		return
+	var s := Art.sprite("fx/slash_%d" % idx, 3, 1)
+	s.centered = true
+	s.offset = Vector2.ZERO
+	s.rotation = facing_direction.angle()
+	s.z_index = 5
+	s.modulate = Color(1, 0.96, 0.82) if _aura_color == Color.TRANSPARENT else _aura_color.lightened(0.4)
+	add_child(s)
+	s.position = facing_direction * (14.0 + idx * 4.0) + Vector2(0, -14)
+	if idx == 1:
+		s.scale = Vector2(1.35, 1.35)
+	var t := s.create_tween()
+	t.tween_property(s, "frame", 2, 0.14).from(0)
+	t.tween_callback(s.queue_free)
+	if idx == 2:
+		FX.ring(global_position + facing_direction * 22.0, WPal.DIRT[4], 46.0, 0.3)
+		FX.dust(global_position + facing_direction * 22.0, 8)
+		FX.shake(0.22)
+
+
+func _bite_feedback(fam: int) -> void:
+	var c := WPal.element(fam, 3)
+	FX.burst(global_position + Vector2(0, -26), "fx/dot4", c, 22, 170.0, 0.55, Vector2(0, 260), 160.0, Vector2.UP, Vector2(0.8, 1.8))
+	FX.element_burst(fam, global_position + Vector2(0, -20), 1.0)
+	FX.ring(global_position + Vector2(0, -14), c, 40.0, 0.3)
+	FX.punch(0.12)
+	FX.shake(0.22)
+	FX.popup("CRUNCH!", global_position + Vector2(0, -52), c, 18)
+
+
+func set_respawn_point(p: Vector2) -> void:
+	_respawn_point = p

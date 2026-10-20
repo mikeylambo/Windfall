@@ -25,6 +25,29 @@ var windfall_compost_value: int = 0
 
 var is_focused: bool = false
 var _anim_time: float = 0.0
+var is_wild: bool = false
+
+# Presentation
+const FRUIT_SPOTS := {
+	4: [Vector2(-10, -50), Vector2(9, -56), Vector2(0, -42)],
+	5: [Vector2(-22, -76), Vector2(18, -84), Vector2(-4, -92), Vector2(10, -64), Vector2(-14, -60)],
+	6: [Vector2(-26, -84), Vector2(22, -92), Vector2(-4, -104), Vector2(14, -70), Vector2(-16, -66)],
+}
+var _soil: Sprite2D
+var _trunk: Sprite2D
+var _crown: Node2D
+var _canopy: Sprite2D
+var _fruits: Array[Sprite2D] = []
+var _focus: NinePatchRect
+var _bar: Node2D
+var _cursor: Sprite2D
+var _glow: Sprite2D
+var _trunk_body: StaticBody2D
+var _shown_stage: int = -1
+var _shown_fruit: int = -1
+var _shown_ripe: int = -1
+var _shown_wet: int = -1
+var _sparkle_timer: float = 0.0
 
 # Timing tap mini-game for Prime harvest
 var is_timing_harvest: bool = false
@@ -39,6 +62,7 @@ func _ready() -> void:
 	shape.size = Vector2(80, 80)
 	col.shape = shape
 	add_child(col)
+	_build_visuals()
 
 
 func _process(delta: float) -> void:
@@ -57,7 +81,7 @@ func _process(delta: float) -> void:
 			timing_cursor = 0.0
 			timing_dir = 1.0
 
-	queue_redraw()
+	_update_visuals(delta)
 
 
 func _process_growth(delta: float) -> void:
@@ -111,6 +135,8 @@ func plant_seed(species_id: StringName) -> bool:
 
 func water_plot() -> void:
 	water_level = minf(water_level + 50.0, 100.0)
+	FX.burst(global_position + Vector2(0, -6), "fx/dot4", WPal.WATER[4], 16, 90.0, 0.5, Vector2(0, 220), 60.0, Vector2.UP, Vector2(0.8, 1.5), "world")
+	FX.popup("WATERED", global_position + Vector2(0, -40), WPal.WATER[4], 13)
 	WindfallSound.play_spell(WindfallTypes.Family.TIDE)
 	plot_tended.emit(self, "Watered Plot")
 
@@ -119,6 +145,8 @@ func prune_tree() -> void:
 	if tree_stage >= WindfallTypes.TreeStage.SAPLING and not is_pruned:
 		is_pruned = true
 		WindfallSound.play_swing()
+		FX.burst(global_position + Vector2(0, -60), "fx/leaf", Color.WHITE, 12, 90.0, 0.9, Vector2(0, 90), 180.0, Vector2.UP, Vector2(1, 1.5), "world")
+		FX.popup("PRUNED +QUALITY", global_position + Vector2(0, -40), WPal.LEAF[5], 13)
 		plot_tended.emit(self, "Pruned Branches (+Quality)")
 
 
@@ -164,12 +192,20 @@ func _complete_timing_harvest(player: RootbornPlayer) -> void:
 	var final_ripeness: int = current_ripeness
 
 	# Sweet spot is center 0.40 to 0.60
+	var bar_pos := global_position + Vector2(0, _bar.position.y)
 	if timing_cursor >= 0.38 and timing_cursor <= 0.62:
 		final_ripeness = WindfallTypes.Ripeness.PRIME
 		WindfallSound.play_prime_timing()
+		FX.popup("PRIME!", bar_pos + Vector2(0, -14), WPal.GOLD[4], 26, 34.0, 1.0)
+		FX.burst(bar_pos, "fx/spark", WPal.GOLD[4], 26, 180.0, 0.6, Vector2(0, 120), 180.0, Vector2.UP, Vector2(1, 2.5), "overlay", Color(0, 0, 0, 0), true)
+		FX.ring(bar_pos, WPal.GOLD[3], 60.0, 0.4)
+		FX.flash_light(bar_pos, WPal.GOLD[3], 90.0, 0.5)
+		FX.punch(0.06)
+		FX.shake(0.15)
 	else:
 		final_ripeness = WindfallTypes.Ripeness.RIPE
 		WindfallSound.play_harvest()
+		FX.popup("Ripe", bar_pos + Vector2(0, -10), WPal.CREAM[3], 15)
 
 	_harvest_fruit(player, final_ripeness)
 
@@ -190,6 +226,7 @@ func _harvest_fruit(player: RootbornPlayer, ripeness: int) -> void:
 		fruit_count = 3
 		is_pruned = false
 
+	_fly_fruit_to(player)
 	plot_harvested.emit(self, fruit_inst)
 
 
@@ -203,103 +240,190 @@ func set_focused(val: bool) -> void:
 	is_focused = val
 
 
-# ── Visual Rendering ───────────────────────────────────────────────────────────
+# ── Presentation ───────────────────────────────────────────────────────────
 
-func _draw() -> void:
-	# 1. Soil tile
-	var soil_col: Color = _get_soil_color()
-	if water_level > 20.0:
-		soil_col = soil_col.darkened(0.2)
-	draw_rect(Rect2(-36, -36, 72, 72), soil_col)
-
-	# Border
-	var border_col := Color(0.25, 0.18, 0.12)
-	if is_focused:
-		border_col = Color(1.0, 0.95, 0.4)
-	draw_rect(Rect2(-36, -36, 72, 72), border_col, false, 2.5)
-
-	# Water puddle shimmer
-	if water_level > 40.0:
-		var w_alpha: float = (water_level / 100.0) * 0.3
-		draw_circle(Vector2(12, 12), 10.0, Color(0.2, 0.6, 1.0, w_alpha))
-
-	# 2. Tree drawing by stage
-	match tree_stage:
-		WindfallTypes.TreeStage.SEED:
-			draw_circle(Vector2.ZERO, 5.0, Color(0.4, 0.25, 0.15))
-			draw_line(Vector2.ZERO, Vector2(0, -8), Color(0.3, 0.8, 0.2), 2.0)
-		WindfallTypes.TreeStage.SPROUT:
-			draw_line(Vector2.ZERO, Vector2(0, -14), Color(0.25, 0.75, 0.2), 3.0)
-			draw_circle(Vector2(-5, -12), 4.0, Color(0.3, 0.85, 0.3))
-			draw_circle(Vector2(5, -12), 4.0, Color(0.3, 0.85, 0.3))
-		WindfallTypes.TreeStage.SAPLING:
-			draw_line(Vector2.ZERO, Vector2(0, -24), Color(0.45, 0.3, 0.15), 4.0)
-			draw_circle(Vector2(0, -26), 12.0, Color(0.2, 0.6, 0.2))
-		WindfallTypes.TreeStage.YOUNG:
-			draw_line(Vector2.ZERO, Vector2(0, -32), Color(0.4, 0.25, 0.12), 6.0)
-			draw_circle(Vector2(0, -34), 18.0, Color(0.18, 0.55, 0.18))
-		WindfallTypes.TreeStage.MATURE, WindfallTypes.TreeStage.ANCIENT:
-			_draw_mature_tree()
-
-	# 3. Harvest Timing Mini-Game Bar
-	if is_timing_harvest:
-		_draw_timing_bar()
+func _build_visuals() -> void:
+	_soil = Sprite2D.new()
+	_soil.z_index = -5
+	_soil.position = Vector2(0, 6)
+	add_child(_soil)
+	_trunk = Art.sprite("trees/trunk_5", 1, 1, Vector2(48, 120))
+	add_child(_trunk)
+	_crown = Node2D.new()
+	add_child(_crown)
+	_canopy = Art.sprite("trees/canopy_5_0", 1, 1, Vector2(48, 120))
+	_crown.add_child(_canopy)
+	_focus = NinePatchRect.new()
+	_focus.texture = Art.tex("ui/focus")
+	_focus.patch_margin_left = 12
+	_focus.patch_margin_top = 12
+	_focus.patch_margin_right = 12
+	_focus.patch_margin_bottom = 12
+	_focus.size = Vector2(92, 76)
+	_focus.position = Vector2(-46, -32)
+	_focus.z_index = -4
+	_focus.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_focus.visible = false
+	add_child(_focus)
+	_bar = Node2D.new()
+	_bar.z_index = 40
+	_bar.visible = false
+	add_child(_bar)
+	var bar_bg := Art.sprite("ui/harvest_bar")
+	bar_bg.centered = true
+	bar_bg.offset = Vector2.ZERO
+	_bar.add_child(bar_bg)
+	_cursor = Art.sprite("ui/harvest_cursor")
+	_cursor.centered = true
+	_cursor.offset = Vector2.ZERO
+	_bar.add_child(_cursor)
 
 
-func _draw_mature_tree() -> void:
+func _update_visuals(delta: float) -> void:
 	var sp := FruitRegistry.get_species(planted_species_id)
-	var fam: int = int(sp.get("family", WindfallTypes.Family.STORM))
-	var fruit_col: Color = WindfallTypes.FAMILY_COLORS.get(fam, Color.RED)
+	var fam: int = int(sp.get("family", 0))
+	var wet := 1 if water_level > 20.0 else 0
+	if is_wild:
+		_soil.visible = false
+	elif wet != _shown_wet:
+		_shown_wet = wet
+		_soil.texture = Art.tex("world/soil_%d%s" % [soil_type, "_wet" if wet else ""])
 
-	# Trunk
-	draw_line(Vector2(0, 10), Vector2(0, -22), Color(0.38, 0.22, 0.1), 8.0)
+	if tree_stage != _shown_stage:
+		var grew := _shown_stage >= 0 and tree_stage > _shown_stage
+		_shown_stage = tree_stage
+		_shown_fruit = -1
+		_apply_stage(fam)
+		if grew:
+			FX.burst(global_position + Vector2(0, -30), "fx/leaf", Color.WHITE, 10, 80.0, 0.8, Vector2(0, 60), 180.0, Vector2.UP, Vector2(1, 1.5), "world")
+			FX.sparkle(global_position + Vector2(0, -40), WPal.LEAF[5])
+			var t := _crown.create_tween()
+			_crown.scale = Vector2(0.85, 0.85)
+			t.tween_property(_crown, "scale", Vector2.ONE, 0.4).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
-	# Canopy with sway
-	var sway: float = sin(_anim_time * 2.5 + plot_index) * 3.0
-	draw_circle(Vector2(sway, -32), 24.0, Color(0.16, 0.5, 0.16))
-	draw_circle(Vector2(sway + 10, -26), 18.0, Color(0.2, 0.58, 0.2))
-	draw_circle(Vector2(sway - 10, -26), 18.0, Color(0.2, 0.58, 0.2))
+	var shown_fruit := fruit_count if tree_stage >= WindfallTypes.TreeStage.MATURE else 0
+	if shown_fruit != _shown_fruit or current_ripeness != _shown_ripe:
+		_shown_fruit = shown_fruit
+		_shown_ripe = current_ripeness
+		_rebuild_fruit(fam)
 
-	# Glowing ripe fruits swaying on branches!
-	if fruit_count > 0:
-		var fruit_glow := 1.0 + sin(_anim_time * 5.0) * 0.25
-		for f_idx in fruit_count:
-			var angle: float = (float(f_idx) / float(fruit_count)) * TAU
-			var f_pos := Vector2(sway, -28) + Vector2(cos(angle) * 16.0, sin(angle) * 12.0)
-			# Outer element glow
-			draw_circle(f_pos, 6.0 * fruit_glow, fruit_col)
-			# Ripeness center pip
-			var rip_col: Color = WindfallTypes.RIPENESS_COLORS.get(current_ripeness, Color.WHITE)
-			draw_circle(f_pos, 3.0, rip_col)
+	# gentle wind sway on the crown; fruit rides along
+	_crown.skew = sin(_anim_time * 1.4 + plot_index * 1.3 + global_position.x * 0.01) * 0.035
+	_crown.position.x = sin(_anim_time * 1.4 + plot_index * 1.3) * 0.8
+
+	# ripe fruit glints occasionally
+	for f in _fruits:
+		if f.frame > 0:
+			f.set_meta("gt", float(f.get_meta("gt", 0.0)) + delta)
+			if f.get_meta("gt") > 0.07:
+				f.set_meta("gt", 0.0)
+				f.frame = (f.frame + 1) % 4
+		elif current_ripeness >= WindfallTypes.Ripeness.RIPE and current_ripeness != WindfallTypes.Ripeness.WINDFALL and randf() < delta * 0.35:
+			f.frame = 1
+
+	# watered sparkle
+	_sparkle_timer -= delta
+	if water_level > 40.0 and _sparkle_timer <= 0.0 and not is_wild:
+		_sparkle_timer = randf_range(0.8, 1.8)
+		FX.sparkle(global_position + Vector2(randf_range(-30, 30), randf_range(-10, 24)), WPal.WATER[5])
+
+	# focus brackets & harvest bar
+	_focus.visible = is_focused and not is_wild or (is_focused and is_wild)
+	if _focus.visible:
+		_focus.modulate.a = 0.6 + sin(_anim_time * 6.0) * 0.4
+	_bar.visible = is_timing_harvest
+	if is_timing_harvest:
+		var top := -60.0 if tree_stage < WindfallTypes.TreeStage.MATURE else (-150.0 if tree_stage == WindfallTypes.TreeStage.MATURE else -170.0)
+		_bar.position = Vector2(0, top)
+		_cursor.position = Vector2(lerpf(-46.0, 46.0, timing_cursor), 0)
 
 
-func _draw_timing_bar() -> void:
-	# Floating oscillating bar above plot: Green sweet spot in center!
-	var bar_w := 64.0
-	var bar_h := 8.0
-	var bar_y := -60.0
+func _apply_stage(fam: int) -> void:
+	var st := tree_stage
+	_trunk.visible = st >= WindfallTypes.TreeStage.SAPLING
+	if _trunk.visible:
+		_trunk.texture = Art.tex("trees/trunk_%d" % st)
+	_canopy.visible = st != WindfallTypes.TreeStage.EMPTY
+	if _canopy.visible:
+		_canopy.texture = Art.tex("trees/canopy_%d_%d" % [st, fam])
+	# trunk blocks movement once the tree is substantial
+	if st >= WindfallTypes.TreeStage.YOUNG and _trunk_body == null:
+		_trunk_body = StaticBody2D.new()
+		var cs := CollisionShape2D.new()
+		var circ := CircleShape2D.new()
+		circ.radius = 9.0 if st < WindfallTypes.TreeStage.ANCIENT else 13.0
+		cs.shape = circ
+		_trunk_body.add_child(cs)
+		add_child(_trunk_body)
+	if st == WindfallTypes.TreeStage.ANCIENT and _glow == null:
+		_glow = FX.glow(self, WPal.element(fam, 3), 90.0, Vector2(0, -80), 0.3, 0.55)
 
-	# Background bar
-	draw_rect(Rect2(-bar_w * 0.5, bar_y, bar_w, bar_h), Color(0.15, 0.15, 0.15, 0.85))
-	# Green sweet spot (center 25%)
-	var sweet_w := bar_w * 0.24
-	draw_rect(Rect2(-sweet_w * 0.5, bar_y, sweet_w, bar_h), Color(0.2, 0.9, 0.3, 0.9))
-	# Moving cursor
-	var cursor_x := (-bar_w * 0.5) + (timing_cursor * bar_w)
-	draw_line(Vector2(cursor_x, bar_y - 3), Vector2(cursor_x, bar_y + bar_h + 3), Color.WHITE, 2.5)
+
+func _rebuild_fruit(fam: int) -> void:
+	for f in _fruits:
+		f.queue_free()
+	_fruits.clear()
+	if _shown_fruit <= 0:
+		return
+	var spots: Array = FRUIT_SPOTS.get(mini(tree_stage, 6), FRUIT_SPOTS[5])
+	var tint := Color.WHITE
+	match current_ripeness:
+		WindfallTypes.Ripeness.UNRIPE: tint = Color(0.75, 0.95, 0.6)
+		WindfallTypes.Ripeness.PRIME: tint = Color(1.12, 1.08, 1.0)
+		WindfallTypes.Ripeness.WINDFALL: tint = Color(0.7, 0.6, 0.55)
+	for i in mini(_shown_fruit, spots.size()):
+		var f := Art.sprite("trees/fruit_%d" % fam, 4, 1)
+		f.centered = true
+		f.offset = Vector2.ZERO
+		f.self_modulate = tint
+		if current_ripeness == WindfallTypes.Ripeness.WINDFALL:
+			# dropped fruit lies on the ground around the trunk
+			add_child(f)
+			f.position = Vector2(-22 + i * 15, 18 + (i % 2) * 6)
+			f.z_index = -3
+		else:
+			_crown.add_child(f)
+			f.position = spots[i]
+		_fruits.append(f)
 
 
-func _get_soil_color() -> Color:
-	match soil_type:
-		WindfallTypes.SoilType.ASH:
-			return Color(0.3, 0.28, 0.26)
-		WindfallTypes.SoilType.RIME:
-			return Color(0.55, 0.65, 0.75)
-		WindfallTypes.SoilType.SILT:
-			return Color(0.38, 0.32, 0.22)
-		WindfallTypes.SoilType.STORMGLASS:
-			return Color(0.42, 0.35, 0.52)
-		WindfallTypes.SoilType.LEY:
-			return Color(0.52, 0.48, 0.32)
-		_:
-			return Color(0.32, 0.24, 0.16)
+func _fly_fruit_to(player: Node2D) -> void:
+	if FX.overlay == null or player == null:
+		return
+	var fam: int = int(FruitRegistry.get_species(planted_species_id).get("family", 0))
+	var f := Art.sprite("trees/fruit_%d" % fam, 4, 1)
+	f.centered = true
+	f.offset = Vector2.ZERO
+	FX.overlay.add_child(f)
+	var start := global_position + Vector2(0, -70)
+	f.global_position = start
+	var t := f.create_tween()
+	t.tween_method(func(k: float):
+		if is_instance_valid(player):
+			var end := player.global_position + Vector2(0, -24)
+			f.global_position = start.lerp(end, k) + Vector2(0, -sin(k * PI) * 40.0)
+			f.scale = Vector2.ONE * (1.4 - k * 0.6), 0.0, 1.0, 0.4).set_trans(Tween.TRANS_SINE)
+	t.tween_callback(f.queue_free)
+
+
+func get_prompt() -> String:
+	if is_timing_harvest:
+		return "Tap in the gold zone!"
+	var sp_name: String = FruitRegistry.get_species(planted_species_id).get("name", "Fruit")
+	if tree_stage >= WindfallTypes.TreeStage.MATURE and fruit_count > 0:
+		return ("Gather windfall %s" if current_ripeness == WindfallTypes.Ripeness.WINDFALL else "Harvest %s") % sp_name
+	if tree_stage == WindfallTypes.TreeStage.EMPTY:
+		if is_wild:
+			return ""
+		var players := get_tree().get_nodes_in_group("player")
+		if players.is_empty():
+			return ""
+		var p: RootbornPlayer = players[0]
+		var sid := p.selected_seed_id
+		if int(p.satchel_seeds.get(sid, 0)) > 0:
+			return "Plant %s seed" % FruitRegistry.get_species(sid).get("name", "")
+		return "Empty plot · no seeds armed"
+	var pl := get_tree().get_first_node_in_group("player") as RootbornPlayer
+	if pl and pl.current_tool == WindfallTypes.ToolType.PRUNING_SHEARS and not is_pruned and tree_stage >= WindfallTypes.TreeStage.SAPLING:
+		return "Prune %s" % sp_name
+	return "Water %s" % sp_name
