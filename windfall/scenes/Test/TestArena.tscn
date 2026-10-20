@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://cqsyt332t77c3"]
+
+[ext_resource type="PackedScene" uid="uid://bayq76rt8v0sd" path="res://scenes/Units/PlayerUnit.tscn" id="1_6cl2b"]
+[ext_resource type="PackedScene" uid="uid://iit52wg757ga" path="res://scenes/UI/DebugOverlay.tscn" id="2_gmgo3"]
+[ext_resource type="PackedScene" uid="uid://ota7xp2jnymg" path="res://scenes/UI/PauseMenu.tscn" id="3_8ghfj"]
+
+[node name="TestArena" type="Node2D" unique_id=1658449353]
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=257015315]
+
+[node name="ReadyLabel" type="Label" parent="." unique_id=984777140]
+offset_left = 32.0
+offset_top = 32.0
+offset_right = 32.0
+offset_bottom = 32.0
+text = "Godot Game Template Ready"
+
+[node name="PlayerUnit" parent="." unique_id=1955313940 instance=ExtResource("1_6cl2b")]
+position = Vector2(320, 240)
+
+[node name="DebugOverlay" parent="." unique_id=628229860 instance=ExtResource("2_gmgo3")]
+
+[node name="PauseMenu" parent="." unique_id=1999403484 instance=ExtResource("3_8ghfj")]

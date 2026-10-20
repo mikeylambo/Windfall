@@ -1,0 +1,23 @@
+[gd_scene format=3 uid="uid://qqisc0fu5qfq"]
+
+[ext_resource type="Script" uid="uid://b6qecrl4hlxhh" path="res://scripts/Units/Unit.gd" id="1_6w71s"]
+[ext_resource type="Script" uid="uid://t5pa6gh7wo8a" path="res://scripts/StatusEffects/StatusEffectController.gd" id="2_njs6o"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_6w71s"]
+radius = 16.0
+
+[sub_resource type="PlaceholderTexture2D" id="PlaceholderTexture2D_6w71s"]
+size = Vector2(32, 32)
+
+[node name="Unit" type="CharacterBody2D" unique_id=1668047339]
+script = ExtResource("1_6w71s")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1859544569]
+shape = SubResource("CircleShape2D_6w71s")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=60709813]
+modulate = Color(0.2, 0.7, 1, 1)
+texture = SubResource("PlaceholderTexture2D_6w71s")
+
+[node name="StatusEffectController" type="Node" parent="." unique_id=373341448]
+script = ExtResource("2_njs6o")

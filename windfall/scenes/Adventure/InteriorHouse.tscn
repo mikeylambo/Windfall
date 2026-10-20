@@ -1,0 +1,76 @@
+[gd_scene load_steps=5 format=3 uid="uid://b7vkm8h43a1el"]
+
+[ext_resource type="Script" path="res://scripts/Adventure/AdventurePlayer2D.gd" id="1_player"]
+[ext_resource type="Script" path="res://scripts/components/StatsComponent.gd" id="2_stats"]
+[ext_resource type="Script" path="res://scripts/Adventure/Door2D.gd" id="3_door"]
+[ext_resource type="Script" path="res://scripts/Adventure/SpawnPoint2D.gd" id="4_spawn"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_player"]
+radius = 12.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_door"]
+size = Vector2(40, 20)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_h"]
+size = Vector2(800, 32)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_v"]
+size = Vector2(32, 600)
+
+[node name="InteriorHouse" type="Node2D"]
+
+[node name="Floor" type="ColorRect" parent="."]
+offset_left = 240.0
+offset_top = 100.0
+offset_right = 1040.0
+offset_bottom = 620.0
+color = Color(0.25, 0.18, 0.12, 1)
+
+[node name="StaticBody2D" type="StaticBody2D" parent="."]
+
+[node name="WallN" type="CollisionShape2D" parent="StaticBody2D"]
+position = Vector2(640, 84)
+shape = SubResource("RectangleShape2D_wall_h")
+
+[node name="WallS" type="CollisionShape2D" parent="StaticBody2D"]
+position = Vector2(640, 636)
+shape = SubResource("RectangleShape2D_wall_h")
+
+[node name="WallW" type="CollisionShape2D" parent="StaticBody2D"]
+position = Vector2(224, 360)
+shape = SubResource("RectangleShape2D_wall_v")
+
+[node name="WallE" type="CollisionShape2D" parent="StaticBody2D"]
+position = Vector2(1056, 360)
+shape = SubResource("RectangleShape2D_wall_v")
+
+[node name="DoorToOverworld" type="Area2D" parent="."]
+position = Vector2(640, 610)
+script = ExtResource("3_door")
+target_scene_path = "res://scenes/Adventure/AdventureDemo.tscn"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="DoorToOverworld"]
+shape = SubResource("RectangleShape2D_door")
+
+[node name="ColorRect" type="ColorRect" parent="DoorToOverworld"]
+offset_left = -20.0
+offset_top = -10.0
+offset_right = 20.0
+offset_bottom = 10.0
+color = Color(0.8, 0.6, 0.2, 1)
+
+[node name="SpawnPoint2D" type="Marker2D" parent="."]
+position = Vector2(640, 520)
+script = ExtResource("4_spawn")
+
+[node name="AdventurePlayer2D" type="CharacterBody2D" parent="."]
+position = Vector2(640, 520)
+script = ExtResource("1_player")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="AdventurePlayer2D"]
+shape = SubResource("CircleShape2D_player")
+
+[node name="StatsComponent" type="Node" parent="AdventurePlayer2D"]
+script = ExtResource("2_stats")
+
+[node name="Camera2D" type="Camera2D" parent="AdventurePlayer2D"]

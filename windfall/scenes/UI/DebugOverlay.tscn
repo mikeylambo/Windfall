@@ -1,0 +1,13 @@
+[gd_scene format=3 uid="uid://iit52wg757ga"]
+
+[ext_resource type="Script" uid="uid://cmuwwb07roao5" path="res://scripts/ui/DebugOverlay.gd" id="1_w4frs"]
+
+[node name="DebugOverlay" type="CanvasLayer" unique_id=628229860]
+script = ExtResource("1_w4frs")
+
+[node name="DebugLabel" type="Label" parent="." unique_id=390144904]
+offset_left = 12.0
+offset_top = 12.0
+offset_right = 432.0
+offset_bottom = 192.0
+text = "Debug Overlay"

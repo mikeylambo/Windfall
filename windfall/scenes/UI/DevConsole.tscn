@@ -1,0 +1,27 @@
+[gd_scene format=3 uid="uid://cmhwyoom64mxt"]
+
+[ext_resource type="Script" uid="uid://gsgr68cixbjx" path="res://scripts/ui/DevConsole.gd" id="1_d7vac"]
+
+[node name="DevConsole" type="CanvasLayer" unique_id=1938350087]
+script = ExtResource("1_d7vac")
+
+[node name="Panel" type="PanelContainer" parent="." unique_id=517548066]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 300.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel" unique_id=1553573462]
+layout_mode = 2
+
+[node name="LogOutput" type="RichTextLabel" parent="Panel/VBoxContainer" unique_id=853788719]
+custom_minimum_size = Vector2(0, 220)
+layout_mode = 2
+bbcode_enabled = true
+scroll_following = true
+
+[node name="CommandInput" type="LineEdit" parent="Panel/VBoxContainer" unique_id=1390033209]
+layout_mode = 2
+placeholder_text = "Enter command..."

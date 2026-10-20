@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://b0mmocjjvqaof"]
+
+[ext_resource type="Script" uid="uid://b88j8bpu3jnqo" path="res://scripts/ui/CreditsScene.gd" id="1_70j8l"]
+
+[node name="CreditsScene" type="Control" unique_id=1624694563]
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_70j8l")
+
+[node name="TitleLabel" type="Label" parent="." unique_id=700741206]
+layout_mode = 0
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -120.0
+offset_top = 40.0
+offset_right = 120.0
+offset_bottom = 80.0
+text = "Credits"
+horizontal_alignment = 1
+
+[node name="CreditsList" type="VBoxContainer" parent="." unique_id=1594634843]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -220.0
+offset_top = -100.0
+offset_right = 220.0
+offset_bottom = 100.0
+
+[node name="BackButton" type="Button" parent="." unique_id=396349143]
+layout_mode = 0
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -80.0
+offset_top = -80.0
+offset_right = 80.0
+offset_bottom = -40.0
+text = "Back"
