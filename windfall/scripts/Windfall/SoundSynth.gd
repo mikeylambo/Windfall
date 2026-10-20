@@ -242,6 +242,27 @@ func play_ui_back() -> void:
 	_play(s, -8.0, 0.0, &"UI")
 
 
+## Synthesise everything up front, a little per frame, so no sound ever
+## hitches gameplay on first use. Kicked off by the title screen.
+func prewarm() -> void:
+	for v in _voices:
+		v.volume_db = -80.0
+	var jobs: Array[Callable] = [play_swing, play_hit, play_hurt, play_roll, play_poof, play_harvest,
+		play_prime_timing, play_plant, play_raid_horn, play_raid_sting, play_ui_move, play_ui_confirm, play_ui_back]
+	for f in 8:
+		jobs.append(play_bite.bind(f))
+		jobs.append(play_spell.bind(f))
+	for j in jobs:
+		j.call()
+		await get_tree().process_frame
+	var was := _amb_night
+	_amb_night = not was
+	_amb_night = was
+	for v in _voices:
+		v.stop()
+		v.volume_db = 0.0
+
+
 # ── ambience ────────────────────────────────────────────────────────────────
 
 func start_ambience() -> void:

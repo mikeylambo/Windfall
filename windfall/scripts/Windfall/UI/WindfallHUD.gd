@@ -285,9 +285,9 @@ func _process(delta: float) -> void:
 		_displayed_gold = lerpf(_displayed_gold, market.gold, minf(delta * 8.0, 1.0))
 	else:
 		_displayed_gold = market.gold
-	_gold_label.text = str(int(round(_displayed_gold)))
+	_set_text(_gold_label, str(int(round(_displayed_gold))))
 	if lighting:
-		_clock_label.text = "Day %d · %s" % [day_manager.day_number, lighting.hour_string()]
+		_set_text(_clock_label, "Day %d · %s" % [day_manager.day_number, lighting.hour_string()])
 	_stomach.update_timers(player)
 	_update_prompt()
 
@@ -377,8 +377,15 @@ func _update_prompt() -> void:
 	if target != null and is_instance_valid(target) and _menu == null and not _dialogue.visible:
 		if target.has_method("get_prompt"):
 			text = target.call("get_prompt")
-	_prompt.visible = text != ""
-	_prompt_label.text = text
+	if _prompt.visible != (text != ""):
+		_prompt.visible = text != ""
+	_set_text(_prompt_label, text)
+
+
+## Only touch Label.text when it changes (avoids per-frame relayout).
+func _set_text(l: Label, t: String) -> void:
+	if l.text != t:
+		l.text = t
 
 
 # ── the bite moment ─────────────────────────────────────────────────────────

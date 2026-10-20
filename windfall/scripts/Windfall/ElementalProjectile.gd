@@ -79,7 +79,7 @@ func _build_visuals() -> void:
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_trail.material = m
 	add_child(_trail)
-	FX.glow(self, WPal.element(family, 3), 30.0, Vector2(0, -12), 0.45, 0.85)
+	FX.glow(self, WPal.element(family, 3), 26.0, Vector2(0, -12), 0.3, 0.5)
 
 
 func _physics_process(delta: float) -> void:

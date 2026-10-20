@@ -75,11 +75,11 @@ func run(main: WindfallMain, t: SceneTree) -> void:
 	var before := p.satchel_fruits.size()
 	tree_plot.interact(p)
 	check(tree_plot.is_timing_harvest, "harvest timing bar opened")
+	await shot("_harvest_bar")
 	var guard := 0
-	while not (tree_plot.timing_cursor > 0.45 and tree_plot.timing_cursor < 0.55) and guard < 600:
+	while not (tree_plot.timing_cursor > 0.44 and tree_plot.timing_cursor < 0.56) and guard < 600:
 		await frames(1)
 		guard += 1
-	await shot("_harvest_bar")
 	tree_plot.interact(p)
 	await secs(0.15)
 	await shot("03_prime_harvest")
@@ -151,13 +151,14 @@ func run(main: WindfallMain, t: SceneTree) -> void:
 			var e: Node2D = enemies[0]
 			var to := (e.global_position - p.global_position)
 			if to.length() > 150.0:
-				p.global_position = e.global_position - to.normalized() * 120.0
+				p.global_position = e.global_position - to.normalized() * 110.0
+				main.camera.reset_smoothing()
 			p.facing_direction = (e.global_position - p.global_position).normalized()
 			p._skill_cooldowns = {1: 0.0, 2: 0.0, 3: 0.0}
 			p._cast_fruit_skill(0, 1)
 			p._cast_fruit_skill(2, 3)
 			p._start_tool_attack()
-			if shots_taken == 0 and Time.get_ticks_msec() - t0 > 5000:
+			if shots_taken == 0 and Time.get_ticks_msec() - t0 > 5000 and e.global_position.distance_to(p.global_position) < 160.0:
 				await secs(0.12)
 				await shot("02_night_raid")
 				await shot("04_stomach_combo")

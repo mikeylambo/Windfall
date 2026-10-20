@@ -1,113 +1,71 @@
-# WINDFALL: Skill-Tree Gardening (Godot 4.7)
+# WINDFALL: Skill-Tree Gardening (Godot 4.6, GL Compatibility)
 
-**WINDFALL** is an action RPG where every skill grows on a tree. You inherit a dying orchard, travel the world for seeds, cultivate fruit, and *eat* your build. One bite of a Voltberry and you have chain lightning.
+You inherit a dying orchard, and your skills literally grow on trees. Tend by day, forage the wilds in the afternoon, and defend your ripe fruit from poachers at night. Eat a Voltberry and you have chain lightning.
 
-Built upon the 2D Top-Down Adventure RPG Godot template.
+## Run
 
----
+Open this folder in **Godot 4.6** and press **F5** (or `godot --path .` from this directory). It boots to the title screen.
 
 ## Controls
 
-| Action | Key / Input | Description |
+| Action | Keyboard / Mouse | Gamepad |
 |---|---|---|
-| **Move** | `W`, `A`, `S`, `D` / Arrows | 8-directional smooth movement |
-| **Tool Attack** | `J` or `Left Click` | Swings equipped orchard tool weapon |
-| **Cycle Tool** | `Tab` | Swaps between Shears, Scythe, Hoe-Staff, Seed Sling, and Watering Can |
-| **Dodge / Dash** | `Shift` or `Right Click` | Invulnerable roll (enhanced with elemental trails by Motion fruits!) |
-| **Interact / Harvest** | `E` | Tend plot, start harvest, talk to villagers, sleep in bed |
-| **Prime Harvest Tap** | `E` | Tap when harvest cursor hits the green center zone for **PRIME** quality! |
-| **Fast-Eat Fruit** | `1`, `2`, `3` | Bites carried fruit from satchel into stomach |
-| **Skill 1 (Strike)** | `Q` | Casts 1st digesting fruit ability (e.g., Chain Lightning, Fireball, Ice Lance) |
-| **Skill 2 (Burst)** | `R` | Casts 2nd digesting fruit ability (e.g., Thunderclap, Flame Wave, Tidal Push) |
-| **Skill 3 (Ward)** | `T` | Casts 3rd digesting fruit ability (e.g., Frost Shell, Bubble Ward, Rekindle) |
-| **Quickroot (Combat)**| `F` | Slings selected seed into combat to instantly sprout a temporary turret/hazard |
-| **Open Satchel** | `I` or `B` | View carried fruit provisions and seed pouch |
-| **Open Codex** | `C` | Browse the 32 launch species, elements, flavors, and hybrid breeding tree |
+| Move | WASD / Arrows | Left stick |
+| Tool attack | J / Left click | X |
+| Dodge roll (i-frames) | Shift / K / Right click | B |
+| Interact · harvest tap · talk · sleep | E | A |
+| Cycle tool | Tab | Y |
+| Eat satchel fruit 1 · 2 · 3 | 1 · 2 · 3 | D-pad ← · L3 · D-pad → |
+| Fruit skills 1 · 2 · 3 | Q · R · T | LB · RB · RT |
+| Quickroot (sling seed) | F | LT |
+| Satchel · Codex | I · C | Back · R3 |
+| Pause | Esc | Start |
 
----
+All menus are fully keyboard and gamepad navigable (arrows/WASD/D-pad + E/Enter/A, Esc/B to close).
 
-## Core Gameplay Systems
+## The day loop
 
-### 1. The Stomach & Digestion Terrarium (Bottom-Left HUD)
-- **You are what you eat**: Skills exist only while their fruit is digesting.
-- **Hero Bite Moment**: Taking a bite triggers a crisp crunch, elemental juice splash on screen, and the skill blooms onto your HUD.
-- **Pairings & Clashes**:
-  - `Storm` + `Tide` $\rightarrow$ **Conductive**: Lightning arcs through wet enemies for 1.5x damage!
-  - `Ember` + `Gale` $\rightarrow$ **Fanned Flame**: Fire bursts unleash spreading flame vortexes!
-  - `Frost` + `Ember` $\rightarrow$ **Indigestion**: Elemental clash dampens power by 25%!
-  - `Lumen` + `Verdant` $\rightarrow$ **Sanctuary Bloom**: Defensive bursts emit continuous restorative mist.
-- **Aura & Visuals**: Rootborn's body radiates the elemental color of whatever is currently digesting (violet sparks, molten embers, frosty mist).
+1. **Morning**: water, prune, and harvest. Tap **E** while the cursor is in the gold zone for **PRIME** fruit.
+2. **Expedition**: take the **east gate** to forage the wilds.
+3. **Dusk**: return through the gate and the **Night Raid** begins. Poachers eat stolen fruit and turn its skill on you.
+4. **Sleep** at the farmhouse door once the raid is cleared. The game **autosaves** each morning. Use **Continue** on the title screen to resume.
 
-### 2. The Orchard (Literal Skill Tree)
-- **Plots & Soil**: Grid of garden plots with specific soil affinities (`Loam`, `Ash`, `Rime`, `Silt`, `Stormglass`, `Ley`).
-- **Growth Stages**: `Seed` $\rightarrow$ `Sprout` $\rightarrow$ `Sapling` $\rightarrow$ `Young` $\rightarrow$ `Mature` $\rightarrow$ `Ancient`.
-- **Tending**:
-  - `Water`: speeds ripening and keeps roots healthy.
-  - `Prune`: redirects growth to guarantee higher ripeness tiers.
-  - `Harvest Mini-Game`: An oscillating timing cursor appears when picking ripe crops. Tapping within the green sweet-spot awards **PRIME** quality!
-  - `Compost`: cleans windfall and fertilizes soil.
-
-### 3. Quickroot: Battlefield Gardening
-- Press **[F]** in combat to sling the selected seed from your pouch onto the ground.
-- It instantly sprouts a living combat plant:
-  - *Voltberry*: Lightning Rod zapping nearby foes every 1.5s.
-  - *Cinderapple*: Fire Bloom launching explosive fireballs.
-  - *Rimepear*: Glacial Spire chilling and freezing enemies.
-  - *Briarcherry*: Thorn Barricade pinning enemies in place.
-- **Strategic Choice**: Every seed spent in battle is one you didn't plant at home!
-
-### 4. Day / Night Cycle & Night Raids
-- **Morning**: Walk the orchard rows, prune, water, harvest prime fruit, and pack provisions.
-- **Expedition**: Journey through the gate to explore wild groves, forage regional seeds, and plant permanent rest waystations.
-- **Night Raid**: Poachers and Gnawer beasts invade the orchard targeting your ripe trees!
-  - *Poachers that eat*: If a poacher reaches a ripe tree, they pick a fruit, **eat it on the spot**, and turn its skills against you! Catch them before they bite!
-  - Defeating the raid secures your harvest and earns bonus Gold.
-
-### 5. Economy & Village Companions
-- **Market Stall**: Sell harvested fruits for Gold. Prices scale with ripeness and traits (e.g. *Sweet* sells for double).
-- **Upgrades**: Purchase Land Plot Expansions, Tool Upgrades (+Damage & Reach), and Stomach Expansions (from 3 up to 8 slots).
-- **Villager Companions**:
-  - *Wren* (Watch / Rogue): Fast twin blades, alerts on night raids.
-  - *Hesper* (Beekeeper / Support): Hives boost cross-pollination hybrid odds.
-  - Recruit them to join your expedition party or leave them at home on guard duty!
-
----
-
-## Project Structure
+## Project layout
 
 ```
-windfall/
-├── scenes/
-│   └── Windfall/
-│       └── WindfallMain.tscn       # Main game scene
-├── scripts/
-│   └── Windfall/
-│       ├── WindfallTypes.gd        # Enums, families, ripeness, colors
-│       ├── FruitRegistry.gd        # 32 base species + hybrids registry
-│       ├── SoundSynth.gd           # Procedural sound synthesizer (bites, spells, chimes)
-│       ├── RootbornPlayer.gd       # Protagonist controller, digestion, tools, quickroot
-│       ├── OrchardPlot2D.gd        # Garden plots, growth cycle, timing tap harvest
-│       ├── PoacherEnemy2D.gd       # Night raid enemies that steal and eat fruit
-│       ├── ElementalProjectile.gd  # Spells, chain lightning, fireballs, ice lances
-│       ├── QuickrootSprout.gd      # Combat-planted living sprouts
-│       ├── DayCycleManager.gd      # Morning -> Expedition -> Night Raid cycle
-│       ├── MarketManager.gd        # Economy, selling crops, shop upgrades, pantry
-│       ├── ExpeditionZone.gd       # Wild region exploration and wild planting
-│       ├── MarketStallProp.gd      # Village shop prop
-│       ├── BedProp.gd              # Farmhouse rest & day advance prop
-│       ├── VillagerCompanion2D.gd  # NPC companions (Wren, Hesper)
-│       ├── WindfallMain.gd         # Main game coordinator
-│       └── UI/
-│           └── WindfallHUD.gd      # Terrarium stomach, bars, bite splash, modals
-└── project.godot                   # Configured with main scene & input maps
+scenes/UI/TitleScreen.tscn         entry point
+scenes/Windfall/WindfallMain.tscn  the game
+scripts/Windfall/                  gameplay (player, plots, enemies, day cycle, market…)
+scripts/Windfall/Art/              pixel-art painters (code-drawn sprites)
+scripts/Windfall/World/            WorldLayout (map data), WorldDresser, DayLighting
+scripts/Windfall/UI/               HUD, menus, theme builder
+scripts/Windfall/FX/WFX.gd         FX autoload: particles, popups, glows, lightning
+autoload/ProceduralSprites.gd      `Art` autoload: texture catalog for the baked sheets
+assets/art/                        baked PNG sprite sheets (edit freely in Aseprite)
+assets/ui/windfall_theme.tres      the shared UI Theme
+tools/                             bake + automated playtest scripts (excluded from exports)
 ```
 
----
+## Art pipeline
 
-## Launching the Game
+All art is hand-authored pixel art written as code: palette in `WPal.gd`, painters in `scripts/Windfall/Art/`. It is baked to PNG sheets at 1 texel = 2 world px (UI at 3 px).
 
-To run the game in Godot:
-```bash
-godot --path /Users/mikeparker/.gemini/antigravity/scratch/windfall
 ```
-Or open the folder `/Users/mikeparker/.gemini/antigravity/scratch/windfall` directly in the Godot 4 Editor and press **F5** (Play Project).
+godot --headless -s res://tools/bake_art.gd                 # rebake everything
+godot --headless -s res://tools/bake_art.gd -- only=trees   # one group
+godot --headless --import && godot --headless -s res://tools/bake_art.gd -- only=theme
+```
+
+You can also paint over any PNG in `assets/art/` directly; just don't rebake that group afterwards.
+
+## Automated playtest
+
+`tools/playtest_runner.gd` plays a full loop: title, tutorial, PRIME harvest, combo, expedition, raid, sleep, autosave, Continue. It asserts each step and writes the screenshots in `/screenshots`. It needs a display:
+
+```
+xvfb-run godot --rendering-driver opengl3 --resolution 1280x720 -s res://tools/playtest_runner.gd
+```
+
+## Export
+
+Presets for **macOS** (universal, ad-hoc signed) and **Web** (single-threaded, so it hosts anywhere, including itch.io) are in `export_presets.cfg`. Output goes to `../build/`.

@@ -40,7 +40,10 @@ func _process(_delta: float) -> void:
 			continue
 		var s: Sprite2D = s_raw
 		var host: Node2D = host_raw
-		s.global_position = host.global_position + g.offset
+		var hp: Vector2 = host.global_position
+		if hp != g.get("last", Vector2.INF):
+			g["last"] = hp
+			s.global_position = hp + g.offset
 		var a: float = g.base_alpha * lerpf(g.day_alpha, 1.0, night)
 		a *= 1.0 + sin(Time.get_ticks_msec() * 0.001 * g.pulse + g.seed) * 0.12
 		s.modulate.a = a * (1.0 if host.visible else 0.0)
@@ -71,6 +74,7 @@ func set_glow_offset(s: Sprite2D, offset: Vector2) -> void:
 	for g in _glows:
 		if is_instance_valid(g.sprite) and g.sprite == s:
 			g.offset = offset
+			g["last"] = Vector2.INF
 
 
 func flash_light(pos: Vector2, color: Color, radius: float, dur: float = 0.25) -> void:

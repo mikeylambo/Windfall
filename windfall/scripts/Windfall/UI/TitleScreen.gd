@@ -74,6 +74,7 @@ func _ready() -> void:
 	_build_ui()
 	WindfallSound.start_ambience()
 	WindfallSound.set_ambience_night(false)
+	WindfallSound.prewarm()
 
 
 func _add_ambient_particles(overlay: CanvasLayer) -> void:

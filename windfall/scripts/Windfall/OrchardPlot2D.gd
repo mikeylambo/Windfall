@@ -280,8 +280,7 @@ func _build_visuals() -> void:
 
 
 func _update_visuals(delta: float) -> void:
-	var sp := FruitRegistry.get_species(planted_species_id)
-	var fam: int = int(sp.get("family", 0))
+	var fam: int = int(FruitRegistry.get_species(planted_species_id).get("family", 0)) if planted_species_id != &"" else 0
 	var wet := 1 if water_level > 20.0 else 0
 	if is_wild:
 		_soil.visible = false
@@ -328,10 +327,12 @@ func _update_visuals(delta: float) -> void:
 		FX.sparkle(global_position + Vector2(randf_range(-30, 30), randf_range(-10, 24)), WPal.WATER[5])
 
 	# focus brackets & harvest bar
-	_focus.visible = is_focused and not is_wild or (is_focused and is_wild)
+	if _focus.visible != is_focused:
+		_focus.visible = is_focused
 	if _focus.visible:
 		_focus.modulate.a = 0.6 + sin(_anim_time * 6.0) * 0.4
-	_bar.visible = is_timing_harvest
+	if _bar.visible != is_timing_harvest:
+		_bar.visible = is_timing_harvest
 	if is_timing_harvest:
 		var top := -60.0 if tree_stage < WindfallTypes.TreeStage.MATURE else (-150.0 if tree_stage == WindfallTypes.TreeStage.MATURE else -170.0)
 		_bar.position = Vector2(0, top)
