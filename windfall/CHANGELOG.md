@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2 playtest: Pass 3 (every remaining GDD gap)
+- **Land expansion:** the orchard fence now encloses a third row of overgrown plots. Clear them in place or via Market → Upgrades (120g, +60g each). The pond, hives and paths moved to make room.
+- **Compost & blight:** a compost bin turns windfall fruit into compost. Neglected trees can catch blight (halts growth, sickly speckles, flies). Hoe-Staff + compost cures it and fertilises.
+- **Seasons with teeth:** light tint, ground wash and weather per season (petals, sun motes, falling leaves, snow), a season banner, and rules: summer growth, autumn prices, winter slow-down except Frost.
+- **Reaping Elite:** a crimson raid boss every 7th night, with a boss bar. It eats two fruits, fires alternating triple volleys, summons Gnawers at half health, and drops 150g plus rare seeds.
+- **Expedition waystations:** plant a seed in a wild clearing; it grows into a shrine where you can rest (party heal, respawn point) and gather daily.
+- **Villager gifting & affinity:** dialogue choices (Party / Gift / Goodbye), a gift picker in the satchel, and loved/hated flavour reactions. Affinity scales companion power.
+- **Online co-op:** host-authoritative ENet with intent upload, 20 Hz snapshots, spell events and puppets. Host/Join from the title screen. Online, menus lock only *your* player instead of pausing the world.
+- **Tooling:** a full-project compile check, `tools/net_test.sh` (two-process online test), and 12 new playtest assertions (36 total).
+
 ## 1.1 playtest: Pass 2 (readability, framing, GDD alignment)
 
 ### Readability

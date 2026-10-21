@@ -28,6 +28,16 @@ Open this folder in **Godot 4.6** and press **F5** (or `godot --path .` from thi
 - **Wren in the party:** fights with twin blades. **On watch at home:** calls out raids and defends the orchard.
 - **Hesper in the party:** heals the nearest Rootborn. **Tending the hives at home:** +20% spring hybrid odds.
 
+**Online co-op:** Title → **Online Co-op**. One player chooses **Host a Game**, and friends choose **Join** with the host's IP (port **7777**, UDP). On a LAN this just works. Over the internet, the host forwards UDP 7777 or everyone joins a VPN such as Tailscale. The host's save is the shared world.
+
+**Orchard life:**
+- **Seasons** change the rules every 7 days.
+- **Blight** hits neglected trees. Cure it with compost (windfall fruit → compost bin → Hoe-Staff on the tree).
+- Clear **overgrown land** to expand to 9 plots.
+- Plant **waystations** in the wilds.
+- **Gift** villagers their loved flavours.
+- Survive the **Reaping Elite** every 7th night.
+
 All menus are fully keyboard and gamepad navigable (arrows/WASD/D-pad + E/Enter/A, Esc/B to close).
 
 ## The day loop
@@ -75,6 +85,10 @@ You can also paint over any PNG in `assets/art/` directly; just don't rebake tha
 ```
 xvfb-run godot --rendering-driver opengl3 --resolution 1280x720 -s res://tools/playtest_runner.gd
 ```
+
+## Online smoke test
+
+`tools/net_test.sh` launches a host and a client headless over localhost and checks that snapshots and intents flow.
 
 ## Export
 
