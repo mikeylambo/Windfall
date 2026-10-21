@@ -52,7 +52,7 @@ func _input(event: InputEvent) -> void:
 	var dev: int = event.device
 	var hud: Node = main.get("hud") if main else null
 	if not claimed(dev):
-		if event.button_index == JOY_BUTTON_START and not get_tree().paused:
+		if event.button_index == JOY_BUTTON_START and not get_tree().paused and not Net.is_client():
 			add_player(dev)
 			get_viewport().set_input_as_handled()
 		return
@@ -76,7 +76,7 @@ func add_player(device: int) -> RootbornPlayer:
 	var p := RootbornPlayer.new()
 	p.player_index = players.size()
 	p.sheet = SHEETS[p.player_index]
-	p.input = PlayerInput.new(device, false)
+	p.input = PlayerInput.new(device, false) if device >= 0 else NetworkInput.new()
 	# one homestead: share the satchel and seed pouch by reference
 	p.satchel_fruits = p1.satchel_fruits
 	p.satchel_seeds = p1.satchel_seeds

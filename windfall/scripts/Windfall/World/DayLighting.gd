@@ -56,7 +56,8 @@ func _process(delta: float) -> void:
 		_phase_time += delta
 		var span: Array = PHASE_SPAN.get(_phase, PHASE_SPAN[0])
 		clock = lerpf(span[0], span[1], clampf(_phase_time / float(span[2]), 0.0, 1.0))
-	var col := sample(clock)
+	var col: Color = sample(clock) * (Seasons.TINT[Seasons.current()] as Color)
+	col.a = 1.0
 	if _modulate:
 		_modulate.color = col
 	var n := clampf((clock - 0.66) / 0.16, 0.0, 1.0)

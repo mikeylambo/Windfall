@@ -12,12 +12,16 @@ const HOUSE := Vector2(520, 400)         # base-centre of farmhouse sprite
 const DOOR := Vector2(520, 410)          # bed / sleep interaction
 const STALL := Vector2(400, 650)
 const PLAYER_SPAWN := Vector2(560, 500)
-const ORCHARD := Rect2(650, 250, 380, 390)
+const ORCHARD := Rect2(650, 250, 380, 570)
 const GATE := Vector2(1150, 486)
 const WILDS := Rect2(1300, 140, 1140, 1260)
-const POND := Vector2(840, 900)
+const POND := Vector2(860, 1030)
 const POND_R := Vector2(140, 74)
-const HIVES := [Vector2(1080, 720), Vector2(1120, 748), Vector2(1044, 752)]
+const HIVES := [Vector2(1110, 880), Vector2(1150, 905), Vector2(1072, 910)]
+const HESPER_HOME := Vector2(1130, 830)
+const COMPOST_BIN := Vector2(610, 580)
+## Expedition waystation clearings in the wilds.
+const WAYSTATIONS := [Vector2(1720, 380), Vector2(2120, 760), Vector2(1760, 1180)]
 const WELL := Vector2(400, 470)
 const SCARECROW := Vector2(605, 300)
 const HEDGE_NORTH_Y := 186.0
@@ -30,24 +34,26 @@ const HOMESTEAD_FRAME := Rect2(400, 190, 650, 470)
 const PLOTS := [
 	Vector2(720, 400), Vector2(840, 400), Vector2(960, 400),
 	Vector2(720, 580), Vector2(840, 580), Vector2(960, 580),
+	Vector2(720, 750), Vector2(840, 750), Vector2(960, 750),   # expansion row (bought)
 ]
+const STARTING_PLOTS := 6
 
 ## Dirt paths as polylines (centre line) with half-width.
 const PATHS := [
 	{"pts": [Vector2(520, 420), Vector2(520, 486), Vector2(650, 486)], "w": 20.0},
 	{"pts": [Vector2(520, 486), Vector2(520, 660)], "w": 18.0},
 	{"pts": [Vector2(650, 486), Vector2(1030, 486), Vector2(1300, 486), Vector2(1500, 560), Vector2(1800, 560)], "w": 22.0},
-	{"pts": [Vector2(840, 640), Vector2(840, 800)], "w": 14.0},
+	{"pts": [Vector2(780, 486), Vector2(780, 960)], "w": 12.0},
 	{"pts": [Vector2(1500, 560), Vector2(1640, 860), Vector2(1900, 1060)], "w": 16.0},
 ]
 
-const LANTERNS := [Vector2(610, 450), Vector2(1060, 450), Vector2(1200, 530), Vector2(460, 600), Vector2(440, 380), Vector2(880, 800)]
+const LANTERNS := [Vector2(610, 450), Vector2(1060, 450), Vector2(1200, 530), Vector2(460, 600), Vector2(440, 380), Vector2(820, 870)]
 
 ## Decorative flower patches filling the open lawn.
-const FLOWER_PATCHES := [Vector2(600, 700), Vector2(660, 760), Vector2(1100, 640), Vector2(1180, 380), Vector2(560, 330), Vector2(980, 740), Vector2(420, 760), Vector2(1220, 700)]
+const FLOWER_PATCHES := [Vector2(600, 700), Vector2(660, 760), Vector2(1100, 640), Vector2(1180, 380), Vector2(560, 330), Vector2(1200, 960), Vector2(420, 760), Vector2(1220, 700)]
 
 ## Raid spawn points: out of the treeline around the orchard.
-const RAID_SPAWNS := [Vector2(1260, 300), Vector2(1260, 720), Vector2(700, 860), Vector2(860, 170), Vector2(1100, 860), Vector2(420, 860)]
+const RAID_SPAWNS := [Vector2(1260, 300), Vector2(1260, 720), Vector2(620, 960), Vector2(860, 170), Vector2(1180, 1000), Vector2(420, 880)]
 
 
 static func dist_to_paths(p: Vector2) -> float:

@@ -8,6 +8,8 @@ var _fruit_grid: GridContainer
 var _seed_grid: GridContainer
 var _detail: RichTextLabel
 var _player: RootbornPlayer
+## When set, choosing a fruit gives it to this villager instead of eating it.
+var gift_target: Node = null
 
 
 func _icon() -> String:
@@ -24,7 +26,8 @@ func build() -> void:
 	body.add_child(cols)
 	var left := UIKit.vbox(8)
 	cols.add_child(left)
-	left.add_child(UIKit.bold("Provisions  ·  Accept to eat", 15, UITheme.CREAM_DIM))
+	_head = UIKit.bold("Provisions  ·  Accept to eat", 15, UITheme.CREAM_DIM)
+	left.add_child(_head)
 	_fruit_grid = GridContainer.new()
 	_fruit_grid.columns = 6
 	_fruit_grid.add_theme_constant_override("h_separation", 4)
@@ -50,9 +53,15 @@ func build() -> void:
 	refresh()
 
 
+var _head: Label
+
+
 func refresh() -> void:
 	if _fruit_grid == null:
 		return
+	if gift_target != null:
+		_head.text = "Choose a gift for %s  (loves %s, dislikes %s)" % [gift_target.get("villager_name"), gift_target.get("loved_flavor"), gift_target.get("hated_flavor")]
+		_head.add_theme_color_override("font_color", UITheme.GOLD)
 	for c in _fruit_grid.get_children():
 		c.queue_free()
 	for c in _seed_grid.get_children():
@@ -123,6 +132,17 @@ func _show_seed(sid: StringName, count: int) -> void:
 
 
 func _eat(idx: int) -> void:
+	if Net.is_client():
+		HUDBus.toast("Online: eat with 1 / 2 / 3 (the host keeps the satchel).", WPal.CREAM[3])
+		return
+	if gift_target != null:
+		var f := _player.satchel_fruits[idx]
+		_player.satchel_fruits.remove_at(idx)
+		_player.satchel_changed.emit()
+		var v := gift_target
+		close()
+		v.call("receive_gift", f)
+		return
 	if _player.eat_satchel_fruit_at(idx):
 		close()
 	else:

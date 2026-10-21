@@ -27,6 +27,7 @@ QuestManager="*res://scripts/Adventure/QuestManager.gd"
 CameraFX="*res://autoload/CameraFX.gd"
 Art="*res://autoload/ProceduralSprites.gd"
 FX="*res://scripts/Windfall/FX/WFX.gd"
+Net="*res://scripts/Windfall/Net/NetSession.gd"
 
 CombatManager="*res://scripts/Combat/CombatManager.gd"
 EventBus="*res://autoload/EventBus.gd"

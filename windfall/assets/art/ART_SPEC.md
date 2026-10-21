@@ -25,7 +25,7 @@ Family index order everywhere: 0 Storm, 1 Ember, 2 Frost, 3 Tide, 4 Verdant, 5 G
 
 ## Character sheets: `characters/*.png`
 
-`rootborn`, `rootborn_p2`, `rootborn_p3`, `wren`, `hesper`, `poacher` and `gnawer` all share one layout:
+`rootborn`, `rootborn_p2`, `rootborn_p3`, `wren`, `hesper`, `poacher`, `reaper` (Reaping Elite, drawn at 1.5×) and `gnawer` all share one layout:
 
 * Frame: **20×26 texels → 40×52 px**. Sheet: **4 columns × 20 rows** (160×1040 px).
 * Anchor (feet): frame pixel **(20, 50)**.
@@ -63,6 +63,7 @@ Row/frame counts are defined once, in `Art.ROWS` / `Art.ROW_FRAMES`.
 
 Single sprites anchored at base-centre (bottom-middle), except `shadow_*`, which are centered.
 `farmhouse_windows` is an additive night-glow mask with the same canvas as `farmhouse`.
+`overgrown_plot` (locked land) replaces the soil bed, so it uses the same centred anchor. `waystation_shrine` is anchored at (42, 88) px.
 
 ## Icons: `icons/` (UI, 3×)
 
@@ -93,6 +94,7 @@ Theme wiring lives in `scripts/Windfall/UI/UITheme.gd`, saved to `assets/ui/wind
 * `dust`, `smoke` (4 frames), `poof` (5 frames), `sparkle` (4 frames), `butterfly` (2 frames): horizontal strips.
 * `slash_0..2`: 3 frames of 40×40 texels, drawn facing right.
 * `proj_<fam>`: 16×16 texels, facing right. `quickroot_<fam>`: 24×28 texels, base (24, 52) px.
+* `blight`: speckle overlay on the same 48×64 canvas as the tree canopies. `petal`, `snowflake`, `leaf`, `dot`: seasonal weather.
 * `ring`, `ground_ring`, `spark`, `shard`, `leaf`, `dot`, `dot4`: particle textures. Particles are tinted at runtime, so keep them white or neutral.
 
 Not art (by design): chain-lightning bolts are `Line2D` geometry, and fades/menu dims are solid palette colours.
@@ -104,6 +106,7 @@ Not art (by design): chain-lightning bolts are `Line2D` geometry, and fades/menu
 | `characters/gnawer` | 160×1040 |
 | `characters/hesper` | 160×1040 |
 | `characters/poacher` | 160×1040 |
+| `characters/reaper` | 160×1040 |
 | `characters/rootborn` | 160×1040 |
 | `characters/rootborn_p2` | 160×1040 |
 | `characters/rootborn_p3` | 160×1040 |
@@ -191,6 +194,7 @@ Not art (by design): chain-lightning bolts are `Line2D` geometry, and fades/menu
 | `props/bush_1` | 32×24 |
 | `props/bush_2` | 32×24 |
 | `props/bush_3` | 32×24 |
+| `props/compost_bin` | 52×48 |
 | `props/crate` | 32×32 |
 | `props/farmhouse` | 208×200 |
 | `props/farmhouse_windows` | 208×200 |
@@ -207,6 +211,7 @@ Not art (by design): chain-lightning bolts are `Line2D` geometry, and fades/menu
 | `props/hedge_3` | 40×36 |
 | `props/lantern` | 20×52 |
 | `props/market_stall` | 128×116 |
+| `props/overgrown_plot` | 80×68 |
 | `props/reeds` | 24×32 |
 | `props/rock_0` | 28×20 |
 | `props/rock_1` | 28×20 |
@@ -217,6 +222,8 @@ Not art (by design): chain-lightning bolts are `Line2D` geometry, and fades/menu
 | `props/shadow_medium` | 52×24 |
 | `props/shadow_small` | 32×16 |
 | `props/stump` | 32×24 |
+| `props/waystation_ring` | 84×52 |
+| `props/waystation_shrine` | 84×100 |
 | `props/well` | 60×76 |
 | `icons/bolt` | 48×48 |
 | `icons/codex` | 48×48 |
@@ -328,6 +335,7 @@ Not art (by design): chain-lightning bolts are `Line2D` geometry, and fades/menu
 | `ui/slot_2` | 60×60 |
 | `ui/slot_3` | 60×60 |
 | `ui/vignette` | 256×256 |
+| `fx/blight` | 96×128 |
 | `fx/butterfly` | 28×10 |
 | `fx/dot` | 4×4 |
 | `fx/dot4` | 8×8 |
@@ -335,6 +343,7 @@ Not art (by design): chain-lightning bolts are `Line2D` geometry, and fades/menu
 | `fx/glow` | 64×64 |
 | `fx/ground_ring` | 52×24 |
 | `fx/leaf` | 10×8 |
+| `fx/petal` | 8×6 |
 | `fx/pixel_glow` | 64×64 |
 | `fx/poof` | 240×48 |
 | `fx/proj_0` | 32×32 |
@@ -359,5 +368,6 @@ Not art (by design): chain-lightning bolts are `Line2D` geometry, and fades/menu
 | `fx/slash_1` | 240×80 |
 | `fx/slash_2` | 240×80 |
 | `fx/smoke` | 96×24 |
+| `fx/snowflake` | 6×6 |
 | `fx/spark` | 10×10 |
 | `fx/sparkle` | 56×14 |

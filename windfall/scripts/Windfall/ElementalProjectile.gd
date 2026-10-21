@@ -13,6 +13,8 @@ class_name ElementalProjectile
 var hostile: bool = false
 ## Set by stomach pairings on launch (see RootbornPlayer._launch).
 var conductive: bool = false
+## Online client copy: drawn only, never deals damage.
+var visual_only: bool = false
 var fanned: bool = false
 
 var direction: Vector2 = Vector2.RIGHT
@@ -41,8 +43,12 @@ func _ready() -> void:
 	col.shape = shape
 	add_child(col)
 
-	body_entered.connect(_on_body_entered)
-	area_entered.connect(_on_area_entered)
+	if not visual_only:
+		body_entered.connect(_on_body_entered)
+		area_entered.connect(_on_area_entered)
+		Net.broadcast_projectile(global_position, direction, family, speed, hostile)
+	else:
+		lifetime = minf(lifetime, 0.9)
 	_build_visuals()
 
 

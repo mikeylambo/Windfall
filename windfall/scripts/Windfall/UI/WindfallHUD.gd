@@ -58,6 +58,8 @@ var _displayed_gold: float = 0.0
 var _coop_box: VBoxContainer
 var _coop_chips: Dictionary = {}   # RootbornPlayer -> {bar, fruits}
 var _party_box: HBoxContainer
+var _boss_box: VBoxContainer
+var _boss_bar: PixelBar
 
 
 func _ready() -> void:
@@ -78,6 +80,7 @@ func bind() -> void:
 	day_manager.time_changed.connect(func(_p, _d, _s): _refresh_clock())
 	day_manager.raid_started.connect(func(_w): _raid_chip.visible = true)
 	day_manager.raid_cleared.connect(func(_d): _raid_chip.visible = false)
+	day_manager.boss_spawned.connect(_on_boss)
 	day_manager.raid_progress.connect(func(r, _t): _raid_label.text = "%d left" % r)
 	QuestManager.quest_accepted.connect(func(_q): _refresh_quest())
 	QuestManager.quest_objective_updated.connect(func(_q, _i): _refresh_quest(true))
@@ -252,6 +255,17 @@ func _build() -> void:
 	_banner.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_banner)
 	UIKit.pin(_banner, Control.PRESET_CENTER_TOP, Vector2(0, 130))
+
+	# boss bar (top centre, under the banner area)
+	_boss_box = UIKit.vbox(2)
+	var boss_name := UIKit.header("REAPING ELITE", 30, WPal.RED[4])
+	boss_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_boss_box.add_child(boss_name)
+	_boss_bar = PixelBar.new("ui/bar_hp", 420)
+	_boss_box.add_child(_boss_bar)
+	_boss_box.visible = false
+	add_child(_boss_box)
+	UIKit.pin(_boss_box, Control.PRESET_CENTER_TOP, Vector2(0, 70))
 
 	_dialogue = DialogueBoxW.new()
 	_dialogue.closed.connect(_on_dialogue_closed)
@@ -477,12 +491,35 @@ func say(speaker: String, lines: Array, on_done: Callable = Callable()) -> void:
 		typed.append(String(l))
 	d.lines = typed
 	_dialogue.open(d, on_done)
-	get_tree().paused = true
+	set_world_paused(true)
+
+
+## Dialogue with choices; on_choice(index) runs after the player picks.
+func ask(speaker: String, lines: Array, choices: Array, on_choice: Callable) -> void:
+	var d := DialogueData.new()
+	d.speaker_name = speaker
+	var typed: Array[String] = []
+	for l in lines:
+		typed.append(String(l))
+	d.lines = typed
+	var ch: Array[String] = []
+	for c in choices:
+		ch.append(String(c))
+	d.choices = ch
+	_dialogue.open_with_choices(d, on_choice)
+	set_world_paused(true)
+
+
+func open_gift(villager: Node) -> void:
+	open_menu("satchel")
+	if _menu is SatchelMenu:
+		(_menu as SatchelMenu).gift_target = villager
+		(_menu as SatchelMenu).refresh()
 
 
 func _on_dialogue_closed() -> void:
 	if _menu == null:
-		get_tree().paused = false
+		set_world_paused(false)
 
 
 # ── menus ───────────────────────────────────────────────────────────────────
@@ -536,7 +573,7 @@ func open_menu(menu_name: String) -> void:
 	var t := m.create_tween().set_parallel(true)
 	t.tween_property(m, "modulate:a", 1.0, 0.12)
 	t.tween_property(m, "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	get_tree().paused = true
+	set_world_paused(true)
 	WindfallSound.play_ui_confirm()
 
 
@@ -548,8 +585,30 @@ func close_menu() -> void:
 	is_satchel_open = false
 	is_codex_open = false
 	is_market_open = false
-	get_tree().paused = false
+	set_world_paused(false)
 	WindfallSound.play_ui_back()
+
+
+func _on_boss(e: PoacherEnemy2D) -> void:
+	_boss_box.visible = true
+	_boss_bar.max_value = e.max_health
+	_boss_bar.value = e.current_health
+	toast("The Reaping Elite hungers for two fruits at once...", WPal.RED[4])
+	FX.shake(0.6)
+	WindfallSound.play_raid_sting()
+	e.boss_hp.connect(func(c, m): _boss_bar.max_value = m; _boss_bar.value = c)
+	e.died.connect(func(_x): _boss_box.visible = false)
+
+
+## Offline, menus and dialogue pause the world. Online the world must keep
+## running for everyone else, so only this machine's player is locked.
+func set_world_paused(v: bool) -> void:
+	if Net.online():
+		if player:
+			player.input_locked = v
+			player.velocity = Vector2.ZERO
+	else:
+		get_tree().paused = v
 
 
 func menu_blocked() -> bool:
@@ -609,7 +668,7 @@ func menu_open() -> bool:
 # ── sleep transition ────────────────────────────────────────────────────────
 
 func sleep_transition(on_black: Callable) -> void:
-	get_tree().paused = true
+	set_world_paused(true)
 	var zz := UIKit.header("z z z", 32, UITheme.CREAM_DIM)
 	zz.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	zz.modulate.a = 0.0
@@ -620,6 +679,6 @@ func sleep_transition(on_black: Callable) -> void:
 	t.tween_callback(on_black)
 	t.tween_interval(0.9)
 	t.tween_property(zz, "modulate:a", 0.0, 0.3)
-	t.tween_callback(func(): get_tree().paused = false)
+	t.tween_callback(func(): set_world_paused(false))
 	t.tween_property(_fade, "modulate:a", 0.0, 0.9)
 	t.tween_callback(zz.queue_free)

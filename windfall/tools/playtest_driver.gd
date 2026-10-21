@@ -47,6 +47,19 @@ func finish_dialogue() -> void:
 		await frames(2)
 
 
+## Advance a dialogue and pick a choice when it's offered.
+func finish_dialogue_choose(choice: int) -> void:
+	var guard := 0
+	while DialogueManager.is_active and guard < 40:
+		var d := DialogueManager.current_dialogue
+		if d and not d.choices.is_empty() and DialogueManager.current_line_idx >= d.lines.size() - 1:
+			DialogueManager.select_choice(choice)
+		else:
+			DialogueManager.advance_dialogue()
+		guard += 1
+		await frames(2)
+
+
 func run(main: WindfallMain, t: SceneTree) -> void:
 	tree = t
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(out_dir))
@@ -138,12 +151,55 @@ func run(main: WindfallMain, t: SceneTree) -> void:
 	# ── village party ──────────────────────────────────────────────────────
 	var hesper: VillagerCompanion2D = main.get_node("World/Hesper")
 	hesper.interact(p)
-	await finish_dialogue()
+	await finish_dialogue_choose(0)
 	await secs(0.3)
 	check(hesper.is_in_party, "Hesper joined the party")
+	hesper.global_position = p.global_position + Vector2(40, 10)
 	p.take_damage(30.0)
 	await secs(4.5)
 	check(p.current_health > p.max_health - 30.0, "Hesper (support) healed the player")
+
+	# gift Hesper a fruit she loves (Sweet) through the satchel gift flow
+	var aff0 := hesper.affinity
+	p.satchel_fruits.append(FruitRegistry.create_fruit_instance(&"sparkfig"))   # Sweet
+	main.hud.open_gift(hesper)
+	await secs(0.3)
+	(main.hud._menu as SatchelMenu)._eat(p.satchel_fruits.size() - 1)
+	await secs(0.3)
+	await finish_dialogue()
+	check(hesper.affinity == aff0 + 20, "loved gift raised Hesper's affinity (+20)")
+	check(hesper.power_mult() > 1.0, "affinity boosts companion power")
+
+	# land expansion: clear an overgrown plot
+	var locked_plot: OrchardPlot2D = plots[6]
+	main.market_manager.gold += 200
+	var gold_before := main.market_manager.gold
+	locked_plot.interact(p)
+	await secs(0.3)
+	check(not locked_plot.locked and main.market_manager.gold < gold_before, "bought new orchard land")
+
+	# compost & blight
+	p.satchel_fruits.append(FruitRegistry.create_fruit_instance(&"rimepear", WindfallTypes.Ripeness.WINDFALL))
+	var bin: CompostBin = main.get_node("World/CompostBin")
+	bin.interact(p)
+	check(main.market_manager.compost >= 2, "windfall fruit composted")
+	var sick: OrchardPlot2D = plots[1]
+	sick.has_blight = true
+	await secs(0.3)
+	p.current_tool = WindfallTypes.ToolType.HOE_STAFF
+	sick.interact(p)
+	check(not sick.has_blight, "compost cured blight")
+	p.current_tool = WindfallTypes.ToolType.PRUNING_SHEARS
+
+	# seasons: winter slows most trees but Frost thrives
+	dm.current_season = WindfallTypes.Season.WINTER
+	dm.time_changed.emit(dm.current_phase, dm.day_number, dm.current_season)
+	check(Seasons.growth_mult(WindfallTypes.Family.EMBER, 0) < 1.0 and Seasons.growth_mult(WindfallTypes.Family.FROST, 0) > 1.0, "winter growth rules")
+	main._refresh_weather()
+	await secs(1.2)
+	await shot("11_winter")
+	dm.current_season = WindfallTypes.Season.SPRING
+	dm.time_changed.emit(dm.current_phase, dm.day_number, dm.current_season)
 
 	# ── local co-op: a second pad drops in ─────────────────────────────────
 	var p2: RootbornPlayer = main.coop.add_player(7)
@@ -162,6 +218,13 @@ func run(main: WindfallMain, t: SceneTree) -> void:
 	check(hesper.global_position.distance_to(p.global_position) < 120.0, "party companion travels with you")
 	await secs(2.0)
 	await shot("08_expedition")
+	# plant a waystation in the wilds
+	var way: Waystation = main.waystations[0]
+	p.global_position = way.global_position + Vector2(0, 40)
+	p.satchel_seeds[&"voltberry"] = p.satchel_seeds.get(&"voltberry", 0) + 1
+	p.selected_seed_id = &"voltberry"
+	way.interact(p)
+	check(way.species_id == &"voltberry", "waystation planted in the wilds")
 
 	# ── night raid ─────────────────────────────────────────────────────────
 	gate.interact(p)
@@ -189,6 +252,19 @@ func run(main: WindfallMain, t: SceneTree) -> void:
 	await secs(0.12)
 	await shot("02_night_raid")
 	await shot("04_stomach_combo")
+	# the Reaping Elite (normally every 7th night)
+	var elite := dm.spawn_enemy(PoacherEnemy2D.EnemyType.REAPING_ELITE, p.global_position + Vector2(140, 0))
+	await secs(0.6)
+	check(main.hud._boss_box.visible, "boss bar shown for the Reaping Elite")
+	main.camera.reset_smoothing()
+	await shot("12_reaping_elite")
+	elite.take_damage(elite.max_health * 0.6)
+	await secs(0.3)
+	check(elite._summoned, "Elite summoned Gnawers at half health")
+	var seeds_before := int(p.satchel_seeds.get(&"phoenix_pomegranate", 0))
+	elite.take_damage(9999.0)
+	await secs(0.6)
+	check(int(p.satchel_seeds.get(&"phoenix_pomegranate", 0)) > seeds_before, "Elite drops rare seeds")
 	# let raiders arrive, fight with skills
 	var shots_taken := 1
 	var t0 := Time.get_ticks_msec()
@@ -238,6 +314,12 @@ func run(main: WindfallMain, t: SceneTree) -> void:
 	check(dm.day_number == 2 and dm.current_phase == WindfallTypes.TimeOfDay.MORNING, "slept into Day 2 morning")
 	check(SaveManager.has_save(), "autosave written on new day")
 	await shot("09_new_day")
+	# two more mornings: the waystation takes root, then rest at it
+	way.on_new_day()
+	way.on_new_day()
+	p.current_health = 20.0
+	way.interact(p)
+	check(way.grown() and p.current_health == p.max_health, "grown waystation heals the party")
 	log_line("gold at save: %d" % main.market_manager.gold)
 
 

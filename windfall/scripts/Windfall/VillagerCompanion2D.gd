@@ -126,9 +126,9 @@ func _tick_support(delta: float) -> void:
 	_support_timer = 4.0
 	var p := _nearest_player()
 	if p and p.current_health < p.max_health and global_position.distance_to(p.global_position) < 160.0:
-		p.heal(8.0)
+		p.heal(8.0 * power_mult())
 		FX.burst(p.global_position + Vector2(0, -20), "fx/sparkle", WPal.GOLD[4], 6, 40.0, 0.6, Vector2(0, -30), 180.0, Vector2.UP, Vector2(1, 1.5))
-		FX.popup("+8", p.global_position + Vector2(0, -44), WPal.LEAF[5], 12)
+		FX.popup("+%d" % int(8.0 * power_mult()), p.global_position + Vector2(0, -44), WPal.LEAF[5], 12)
 
 
 func _process_guard(delta: float) -> void:
@@ -147,7 +147,7 @@ func _process_guard(delta: float) -> void:
 		velocity = (target_enemy.global_position - global_position).normalized() * 130.0
 		if best <= 32.0 and _attack_cd <= 0.0:
 			_attack_cd = 1.1
-			target_enemy.call("take_damage", 18.0)
+			target_enemy.call("take_damage", 18.0 * power_mult())
 			WindfallSound.play_swing()
 	else:
 		var post := orchard.get_center() + Vector2(0, 80)
@@ -178,7 +178,7 @@ func _process_party_follow_and_combat(delta: float) -> void:
 		if min_dist <= 32.0 and _attack_cd <= 0.0:
 			_attack_cd = 1.0
 			if target_enemy.has_method("take_damage"):
-				target_enemy.call("take_damage", 24.0)
+				target_enemy.call("take_damage", 24.0 * power_mult())
 				WindfallSound.play_swing()
 	else:
 		# Follow player
@@ -249,16 +249,65 @@ const LINES := {
 }
 
 
+# ── affinity & gifts ────────────────────────────────────────────────────────
+## 0..100. Loved flavours +20, neutral +8, hated -10, one gift per day.
+## Affinity scales Wren's blades and Hesper's healing.
+var affinity: int = 10
+var gifted_today: bool = false
+
+
+func affinity_level() -> int:
+	return clampi(affinity / 20, 0, 5)
+
+
+func power_mult() -> float:
+	return 1.0 + affinity / 100.0
+
+
+func on_new_day() -> void:
+	gifted_today = false
+
+
+func receive_gift(f: Dictionary) -> void:
+	var flavor: String = f.get("flavor", "")
+	var line := ""
+	var delta := 8
+	if flavor == loved_flavor:
+		delta = 20
+		line = "%s! My favourite. You remembered." % f.get("name", "")
+	elif flavor == hated_flavor:
+		delta = -10
+		line = "Oh... %s. Too %s for me." % [f.get("name", ""), flavor.to_lower()]
+	else:
+		line = "A %s? That's thoughtful, thank you." % f.get("name", "")
+	affinity = clampi(affinity + delta, 0, 100)
+	gifted_today = true
+	var col := WPal.LEAF[5] if delta > 0 else WPal.RED[4]
+	FX.popup(("+" if delta > 0 else "") + "%d affinity" % delta, global_position + Vector2(0, -60), col, 14)
+	if delta >= 20:
+		FX.burst(global_position + Vector2(0, -40), "fx/sparkle", WPal.RED[4], 8, 50.0, 0.8, Vector2(0, -40), 180.0, Vector2.UP, Vector2(1, 1.5))
+	HUDBus.say(villager_name, [line, "Affinity %d / 5" % affinity_level()])
+
+
 func interact(_player: RootbornPlayer) -> void:
+	if _player.is_remote():
+		FX.popup("Hi!", global_position + Vector2(0, -60), WPal.CREAM[3], 12)
+		return
 	var pool: Array = LINES.get(villager_name, [["Lovely day for the orchard."]])
 	var lines: Array = pool[_talks % pool.size()].duplicate()
 	_talks += 1
-	var joining := not is_in_party
-	if joining:
-		lines.append("%s joined your party! %s" % [villager_name, "Blades ready." if not is_support() else "I'll keep you patched up."])
-	else:
-		lines.append("%s heads back to %s." % [villager_name, "watch the treeline" if is_guard() else "tend the hives"])
-	HUDBus.say(villager_name, lines, func():
-		is_in_party = joining
-		WindfallSound.play_harvest()
-		spoken.emit(self))
+	lines[lines.size() - 1] = "%s  (Affinity %d / 5)" % [lines[-1], affinity_level()]
+	var choices := ["Head home" if is_in_party else "Join my party", "Give a gift" if not gifted_today else "(Gifted today)", "Goodbye"]
+	HUDBus.ask(villager_name, lines, choices, _on_talk_choice)
+
+
+func _on_talk_choice(choice: int) -> void:
+	match choice:
+		0:
+			is_in_party = not is_in_party
+			WindfallSound.play_harvest()
+			HUDBus.toast("%s %s" % [villager_name, "joined your party!" if is_in_party else ("heads back to " + ("watch the treeline." if is_guard() else "tend the hives."))], WPal.LEAF[5])
+			spoken.emit(self)
+		1:
+			if not gifted_today:
+				HUDBus.open_gift(self)

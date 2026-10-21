@@ -6,6 +6,8 @@ signal plot_tended(plot: OrchardPlot2D, action_name: String)
 
 @export var plot_index: int = 0
 @export var soil_type: int = WindfallTypes.SoilType.LOAM
+## Overgrown land that must be bought (land expansion) before planting.
+@export var locked: bool = false
 
 var tree_stage: int = WindfallTypes.TreeStage.EMPTY
 var planted_species_id: StringName = &""
@@ -48,6 +50,8 @@ var _shown_fruit: int = -1
 var _shown_ripe: int = -1
 var _shown_wet: int = -1
 var _shown_graft: StringName = &""
+var _blight_fx: Sprite2D
+var _flies: CPUParticles2D
 var _sparkle_timer: float = 0.0
 
 # Timing tap mini-game for Prime harvest
@@ -69,11 +73,11 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_anim_time += delta
 
-	# Process tree growth and ripening
-	if tree_stage != WindfallTypes.TreeStage.EMPTY:
+	# Process tree growth and ripening (the host simulates for online clients)
+	if tree_stage != WindfallTypes.TreeStage.EMPTY and not Net.is_client():
 		_process_growth(delta)
 
-	if is_timing_harvest:
+	if is_timing_harvest and not Net.is_client():
 		timing_cursor += timing_dir * 2.2 * delta
 		if timing_cursor >= 1.0:
 			timing_cursor = 1.0
@@ -86,12 +90,15 @@ func _process(delta: float) -> void:
 
 
 func _process_growth(delta: float) -> void:
+	if has_blight:
+		return  # blight halts growth and ripening until treated with compost
 	# Soil affinity multiplier
 	var sp := FruitRegistry.get_species(planted_species_id)
 	var pref_soil: int = int(sp.get("soil_pref", WindfallTypes.SoilType.LOAM))
 	var growth_speed := 1.0
 	if pref_soil == soil_type:
 		growth_speed = 1.4
+	growth_speed *= Seasons.growth_mult(int(sp.get("family", 0)), soil_type)
 	if water_level > 20.0:
 		growth_speed *= 1.2
 		water_level = maxf(water_level - delta * 0.4, 0.0)
@@ -151,7 +158,22 @@ func prune_tree() -> void:
 		plot_tended.emit(self, "Pruned Branches (+Quality)")
 
 
+func _market() -> MarketManager:
+	return get_tree().get_first_node_in_group("market") as MarketManager
+
+
 func interact(player: RootbornPlayer) -> void:
+	if locked:
+		var m := _market()
+		if m and m.expand_land(self):
+			FX.dust(global_position, 14)
+			FX.burst(global_position + Vector2(0, -10), "fx/leaf", Color.WHITE, 16, 120.0, 0.9, Vector2(0, 80), 180.0, Vector2.UP, Vector2(1, 1.6), "world")
+			FX.popup("LAND CLEARED!", global_position + Vector2(0, -40), WPal.GOLD[4], 18)
+		return
+	# Hoe-Staff + compost: cure blight and fertilise
+	if player.current_tool == WindfallTypes.ToolType.HOE_STAFF and tree_stage != WindfallTypes.TreeStage.EMPTY and not is_timing_harvest:
+		if apply_compost():
+			return
 	# If timing harvest is active, player presses E / Interact to tap the sweet spot!
 	if is_timing_harvest:
 		_complete_timing_harvest(player)
@@ -247,6 +269,42 @@ func _bear_fruit() -> void:
 	current_ripeness = WindfallTypes.Ripeness.RIPE
 
 
+func unlock() -> void:
+	locked = false
+	_shown_stage = -2
+	_shown_wet = -1
+
+
+## Spend one compost: cures blight and gives a growth surge.
+func apply_compost() -> bool:
+	var m := _market()
+	if m == null or m.compost <= 0:
+		if has_blight:
+			HUDBus.toast("Blight! Make compost from windfall fruit at the bin.", WPal.RED[4])
+		return false
+	m.compost -= 1
+	m.compost_changed.emit(m.compost)
+	var cured := has_blight
+	has_blight = false
+	growth_timer += stage_duration * 0.5
+	water_level = minf(water_level + 30.0, 100.0)
+	FX.dust(global_position, 10)
+	FX.burst(global_position + Vector2(0, -8), "fx/sparkle", WPal.LEAF[5], 10, 60.0, 0.7, Vector2(0, -40), 180.0, Vector2.UP, Vector2(1, 1.5))
+	FX.popup("BLIGHT CURED!" if cured else "FERTILISED", global_position + Vector2(0, -40), WPal.LEAF[5], 15)
+	WindfallSound.play_plant()
+	plot_tended.emit(self, "Composted")
+	return true
+
+
+## Called once per day by DayCycleManager: neglect breeds blight.
+func roll_blight() -> void:
+	if locked or is_wild or has_blight or tree_stage < WindfallTypes.TreeStage.SAPLING:
+		return
+	var neglected := water_level < 10.0 or (fruit_count > 0 and current_ripeness == WindfallTypes.Ripeness.WINDFALL)
+	if neglected and randf() < 0.35:
+		has_blight = true
+
+
 func set_focused(val: bool) -> void:
 	is_focused = val
 
@@ -293,6 +351,13 @@ func _build_visuals() -> void:
 func _update_visuals(delta: float) -> void:
 	var fam: int = int(FruitRegistry.get_species(planted_species_id).get("family", 0)) if planted_species_id != &"" else 0
 	var wet := 1 if water_level > 20.0 else 0
+	if locked:
+		_soil.visible = true
+		_soil.texture = Art.tex("props/overgrown_plot")
+		_trunk.visible = false
+		_canopy.visible = false
+		_focus.visible = is_focused
+		return
 	if is_wild:
 		_soil.visible = false
 	elif wet != _shown_wet:
@@ -318,6 +383,26 @@ func _update_visuals(delta: float) -> void:
 		_shown_ripe = current_ripeness
 		_rebuild_fruit(fam)
 
+	if _blight_fx == null and has_blight:
+		_blight_fx = Art.sprite("fx/blight", 1, 1, Vector2(48, 120))
+		_crown.add_child(_blight_fx)
+		_flies = CPUParticles2D.new()
+		_flies.texture = Art.tex("fx/dot")
+		_flies.amount = 6
+		_flies.lifetime = 1.4
+		_flies.position = Vector2(0, -60)
+		_flies.emission_shape = CPUParticles2D.EMISSION_SHAPE_SPHERE
+		_flies.emission_sphere_radius = 24.0
+		_flies.gravity = Vector2.ZERO
+		_flies.initial_velocity_min = 10.0
+		_flies.initial_velocity_max = 30.0
+		_flies.spread = 180.0
+		_flies.color = Color("2a1d27")
+		add_child(_flies)
+	elif _blight_fx and not has_blight:
+		_blight_fx.queue_free()
+		_flies.queue_free()
+		_blight_fx = null
 	# gentle wind sway on the crown; fruit rides along
 	_crown.skew = sin(_anim_time * 1.4 + plot_index * 1.3 + global_position.x * 0.01) * 0.035
 	_crown.position.x = sin(_anim_time * 1.4 + plot_index * 1.3) * 0.8
@@ -425,6 +510,11 @@ func _fly_fruit_to(player: Node2D) -> void:
 
 
 func get_prompt() -> String:
+	if locked:
+		var m := _market()
+		return "Clear overgrown land (%dg)" % (m.land_cost() if m else 0)
+	if has_blight:
+		return "Treat blight (Hoe-Staff + compost)"
 	if is_timing_harvest:
 		return "Tap in the gold zone!"
 	var sp_name: String = FruitRegistry.get_species(planted_species_id).get("name", "Fruit")
@@ -442,6 +532,10 @@ func get_prompt() -> String:
 			return "Plant %s seed" % FruitRegistry.get_species(sid).get("name", "")
 		return "Empty plot · no seeds armed"
 	var pl := get_tree().get_first_node_in_group("player") as RootbornPlayer
+	if pl and pl.current_tool == WindfallTypes.ToolType.HOE_STAFF:
+		var mk := _market()
+		if mk and mk.compost > 0:
+			return "Fertilise %s (compost x%d)" % [sp_name, mk.compost]
 	if pl and pl.current_tool == WindfallTypes.ToolType.PRUNING_SHEARS and not is_pruned and tree_stage >= WindfallTypes.TreeStage.SAPLING:
 		return "Prune %s" % sp_name
 	return "Water %s" % sp_name

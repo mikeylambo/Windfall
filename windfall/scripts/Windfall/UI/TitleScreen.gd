@@ -38,6 +38,14 @@ func _ready() -> void:
 	var fams := [1, 0, 2, 4, 3, 7]
 	for i in WorldLayout.PLOTS.size():
 		var p: Vector2 = WorldLayout.PLOTS[i]
+		if i >= WorldLayout.STARTING_PLOTS:
+			var wild := Art.sprite("props/overgrown_plot")
+			wild.centered = true
+			wild.offset = Vector2.ZERO
+			wild.position = p + Vector2(0, 6)
+			wild.z_index = -5
+			world.add_child(wild)
+			continue
 		var stage := 6 if i == 3 else 5
 		var trunk := Art.sprite("trees/trunk_%d" % stage, 1, 1, Vector2(48, 120))
 		trunk.position = p
@@ -173,9 +181,10 @@ func _build_ui() -> void:
 	var new_game := UIKit.button("New Game", _new_game, "icons/season_0")
 	_continue = UIKit.button("Continue", _continue_game, "icons/sun")
 	_continue.disabled = not SaveManager.has_save()
+	var online := UIKit.button("Online Co-op", _open_online, "icons/star")
 	var settings := UIKit.button("Settings", _open_settings, "icons/codex")
 	var quit := UIKit.button("Quit", func(): get_tree().quit(), "icons/moon")
-	for b in [new_game, _continue, settings, quit]:
+	for b in [new_game, _continue, online, settings, quit]:
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		_menu.add_child(b)
 	(_continue if not _continue.disabled else new_game).call_deferred("grab_focus")
@@ -203,7 +212,8 @@ func _process(delta: float) -> void:
 
 
 func _new_game() -> void:
-	SaveManager.delete_save()
+	if not Net.online():
+		SaveManager.delete_save()
 	QuestManager.completed_quests.clear()
 	QuestManager.active_quests.clear()
 	GameFlow.set_meta("pending_load", false)
@@ -228,6 +238,44 @@ func _go() -> void:
 	var t := create_tween()
 	t.tween_property(fade, "modulate:a", 1.0, 0.45)
 	t.tween_callback(func(): GameFlow.start_game())
+
+
+func _open_online() -> void:
+	_menu.visible = false
+	var box := UIKit.vbox(8)
+	box.custom_minimum_size.x = 340
+	_menu.get_parent().add_child(box)
+	box.add_child(UIKit.header("ONLINE CO-OP", 30))
+	box.add_child(UIKit.label("Host shares your orchard; up to 2 friends join by IP (port %d)." % Net.PORT, 20, UITheme.CREAM_DIM))
+	var status := UIKit.label("", 20, UITheme.GOLD)
+	var ip := LineEdit.new()
+	ip.text = "127.0.0.1"
+	ip.placeholder_text = "Host IP address"
+	ip.custom_minimum_size = Vector2(300, 40)
+	var host_btn := UIKit.button("Host a Game", func():
+		if Net.host():
+			status.text = "Hosting on port %d..." % Net.PORT
+			if SaveManager.has_save():
+				_continue_game()
+			else:
+				_new_game())
+	var join_btn := UIKit.button("Join", func():
+		status.text = "Connecting to %s..." % ip.text
+		Net.session_started.connect(func(_r): _join_world(), CONNECT_ONE_SHOT)
+		Net.session_failed.connect(func(reason): status.text = reason, CONNECT_ONE_SHOT)
+		Net.join(ip.text.strip_edges()))
+	var back := UIKit.button("Back", func():
+		box.queue_free()
+		_menu.visible = true
+		_menu.get_child(0).grab_focus())
+	for c in [host_btn, ip, join_btn, back, status]:
+		box.add_child(c)
+	host_btn.call_deferred("grab_focus")
+
+
+func _join_world() -> void:
+	GameFlow.set_meta("pending_load", false)
+	_go()
 
 
 func _open_settings() -> void:

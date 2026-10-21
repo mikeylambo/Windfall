@@ -354,3 +354,62 @@ static func flower_patch(variant: int) -> PixelCanvas:
 		c.px(x + 1, y - 1, pair[1])
 	c.outline(WPal.OUTLINE, 0.4)
 	return c
+
+
+## Overgrown, locked plot (40 x 30): weeds, a stump and a wooden "for sale" sign.
+static func overgrown_plot() -> PixelCanvas:
+	var c := PixelCanvas.new(40, 34, 1700)
+	c.shade_ellipse(20, 22, 18, 10, WPal.SOIL.slice(1, 5), -0.1)
+	for i in 26:
+		var x := c.rng.randi_range(4, 35)
+		var y := c.rng.randi_range(14, 30)
+		var h := c.rng.randi_range(2, 6)
+		c.vline(x, y - h, y, WPal.MOSS[1 + i % 3])
+		c.px(x, y - h, WPal.MOSS[4])
+	c.shade_box(8, 18, 6, 5, WPal.BARK)
+	c.shade_ellipse(11, 18, 3, 1.2, WPal.WOOD.slice(3, 6))
+	# sign
+	c.shade_box(25, 6, 2, 16, WPal.WOOD.slice(1, 5))
+	c.shade_box(19, 3, 14, 8, WPal.WOOD.slice(2, 6))
+	c.rect(22, 5, 2, 4, WPal.GOLD[3])
+	c.rect(21, 6, 4, 1, WPal.GOLD[3])
+	c.rect(21, 8, 4, 1, WPal.GOLD[3])
+	c.outline(WPal.OUTLINE, 0.6)
+	return c
+
+
+## Compost bin 24 x 22, base (12, 21).
+static func compost_bin() -> PixelCanvas:
+	var c := PixelCanvas.new(26, 24, 1800)
+	c.shade_box(2, 6, 22, 17, WPal.WOOD.slice(1, 5))
+	for x in [2, 9, 16, 23]:
+		c.vline(x, 6, 22, WPal.WOOD[1])
+	c.shade_ellipse(13, 6, 10, 3, WPal.SOIL.slice(1, 5))
+	c.speckle([WPal.LEAF[3], WPal.RED[3], WPal.GOLD[3]], 0.2, Rect2i(4, 3, 18, 5))
+	c.outline(WPal.OUTLINE, 0.6)
+	return c
+
+
+## Waystation: mossy stone ring (empty clearing) 40 x 24, and shrine 40 x 48.
+static func waystation_ring() -> PixelCanvas:
+	var c := PixelCanvas.new(42, 26, 1900)
+	for i in 9:
+		var a := i * TAU / 9.0
+		c.shade_ellipse(21 + cos(a) * 16, 14 + sin(a) * 8, 3, 2.4, WPal.STONE.slice(1, 5))
+	c.speckle(WPal.MOSS.slice(2, 5), 0.25, Rect2i(2, 4, 38, 20))
+	c.outline(WPal.OUTLINE, 0.6)
+	return c
+
+
+static func waystation_shrine() -> PixelCanvas:
+	var c := PixelCanvas.new(42, 50, 1950)
+	for i in 9:
+		var a := i * TAU / 9.0
+		c.shade_ellipse(21 + cos(a) * 16, 38 + sin(a) * 8, 3, 2.4, WPal.STONE.slice(1, 5))
+	c.shade_box(17, 14, 8, 24, WPal.STONE.slice(1, 5))
+	c.poly(PackedVector2Array([Vector2(15, 15), Vector2(21, 6), Vector2(27, 15)]), WPal.STONE[3])
+	c.rect(20, 20, 2, 8, WPal.GOLD[4])
+	c.rect(18, 23, 6, 2, WPal.GOLD[4])
+	c.speckle(WPal.MOSS.slice(2, 5), 0.2, Rect2i(16, 28, 10, 10))
+	c.outline(WPal.OUTLINE, 0.6)
+	return c

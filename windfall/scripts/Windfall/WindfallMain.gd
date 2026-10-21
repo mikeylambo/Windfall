@@ -13,6 +13,7 @@ const SAVE_SECTION := &"windfall"
 
 var initial_plots: Array[OrchardPlot2D] = []
 var coop := CoopManager.new()
+var waystations: Array[Waystation] = []
 var dresser := WorldDresser.new()
 
 ## Codex discovery: species the player has seen, harvested or eaten.
@@ -33,6 +34,13 @@ func _ready() -> void:
 	coop.setup(player)
 	dresser.dress(world, $Ground)
 	lighting.dresser = dresser
+
+	for i in WorldLayout.WAYSTATIONS.size():
+		var w := Waystation.new()
+		w.index = i
+		w.position = WorldLayout.WAYSTATIONS[i]
+		world.add_child(w)
+		waystations.append(w)
 
 	for child in $World/OrchardGrid.get_children():
 		if child is OrchardPlot2D:
@@ -73,7 +81,10 @@ func _ready() -> void:
 	for sid in [&"voltberry", &"cinderapple", &"rimepear", &"briarcherry"]:
 		discovered[sid] = true
 
-	if GameFlow.get_meta("pending_load", false):
+	Net.main = self
+	if Net.is_client():
+		_enter_client_mode()
+	elif GameFlow.get_meta("pending_load", false):
 		GameFlow.set_meta("pending_load", false)
 		SaveManager.load_game()
 	else:
@@ -82,8 +93,97 @@ func _ready() -> void:
 	call_deferred("_run_system_diagnostics")
 
 
+# ── online co-op (see Net autoload) ─────────────────────────────────────────
+
+var _net_players: Dictionary = {}   # player slot -> RootbornPlayer puppet
+var _net_enemies: Dictionary = {}   # host instance id -> PoacherEnemy2D puppet
+var _net_phase: int = -1
+
+
+func _enter_client_mode() -> void:
+	day_manager.set_process(false)
+	player.puppet = true
+	_net_players[Net.my_index] = player
+	hud.banner("ONLINE", "Connected to the host's orchard", WPal.LEAF[5])
+
+
+## The host told us which slot we are: our scene Player becomes that slot.
+func net_bind_local(index: int) -> void:
+	_net_players.erase(Net.my_index)
+	for k in _net_players.keys():
+		if _net_players[k] == player:
+			_net_players.erase(k)
+	_net_players[index] = player
+	player.player_index = index
+
+
+func _net_puppet(index: int) -> RootbornPlayer:
+	if _net_players.has(index) and is_instance_valid(_net_players[index]):
+		return _net_players[index]
+	var p := RootbornPlayer.new()
+	p.player_index = index
+	p.sheet = CoopManager.SHEETS[clampi(index, 0, 2)]
+	p.puppet = true
+	p.input = PlayerInput.new(-2, false)
+	world.add_child(p)
+	_net_players[index] = p
+	return p
+
+
+func net_apply_snapshot(s: Dictionary) -> void:
+	for r in s.get("p", []):
+		_net_puppet(int(r[0])).apply_net_state(r)
+	var seen := {}
+	for r in s.get("e", []):
+		var id: int = r[0]
+		seen[id] = true
+		var e: PoacherEnemy2D = _net_enemies.get(id)
+		if e == null or not is_instance_valid(e):
+			e = PoacherEnemy2D.new()
+			e.enemy_type = int(r[1])
+			e.puppet = true
+			e.position = r[2]
+			e.max_health = r[4]
+			world.add_child(e)
+			_net_enemies[id] = e
+		e.apply_net_state(r)
+	for id in _net_enemies.keys():
+		if not seen.has(id):
+			var gone: PoacherEnemy2D = _net_enemies[id]
+			if is_instance_valid(gone):
+				gone.puppet_die()
+			_net_enemies.erase(id)
+	var pls: Array = s.get("pl", [])
+	for i in mini(pls.size(), initial_plots.size()):
+		var r: Array = pls[i]
+		var pl := initial_plots[i]
+		pl.tree_stage = r[0]
+		pl.planted_species_id = StringName(r[1])
+		pl.fruit_count = r[2]
+		pl.current_ripeness = r[3]
+		pl.water_level = r[4]
+		pl.locked = r[5]
+		pl.has_blight = r[6]
+		pl.is_timing_harvest = r[7]
+		pl.timing_cursor = r[8]
+	var d: Array = s.get("d", [1, 0, 0, false])
+	day_manager.day_number = d[0]
+	day_manager.current_season = d[2]
+	day_manager.is_raid_active = d[3]
+	if int(d[1]) != _net_phase:
+		_net_phase = d[1]
+		day_manager.current_phase = _net_phase
+		lighting.set_phase(_net_phase)
+		day_manager.time_changed.emit(_net_phase, d[0], d[2])
+	if int(s.get("g", 0)) != market_manager.gold:
+		market_manager.gold = s.get("g", 0)
+		market_manager.gold_changed.emit(market_manager.gold)
+
+
 func _exit_tree() -> void:
 	SaveManager.unregister_save_provider(SAVE_SECTION)
+	if Net.main == self:
+		Net.main = null
 	Engine.time_scale = 1.0
 
 
@@ -127,16 +227,60 @@ func _on_raid_cleared(day_num: int) -> void:
 	_tutorial_hit(4)
 
 
+var _weather: CPUParticles2D
+var _weather_season: int = -1
+var _ground_wash: ColorRect
+
+
+## Seasonal weather follows the camera on the unlit overlay.
+func _refresh_weather() -> void:
+	var s := day_manager.current_season
+	if s == _weather_season:
+		return
+	var announce := _weather_season >= 0
+	_weather_season = s
+	if _weather:
+		_weather.queue_free()
+	if _ground_wash == null:
+		_ground_wash = ColorRect.new()
+		_ground_wash.size = WorldLayout.SIZE
+		_ground_wash.z_index = -19
+		_ground_wash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		$Ground.add_child(_ground_wash)
+	var wash: Color = Seasons.GROUND_WASH[s]
+	if announce:
+		_ground_wash.create_tween().tween_property(_ground_wash, "color", wash, 2.0)
+	else:
+		_ground_wash.color = wash
+	_weather = Seasons.make_weather(s)
+	if camera:
+		_weather.position = camera.get_screen_center_position()
+	$FXOverlay.add_child(_weather)
+	if announce:
+		hud.banner(Seasons.NAMES[s].to_upper(), Seasons.BLURB[s], WPal.GOLD[4], 3.0)
+
+
+func _process(_delta: float) -> void:
+	if _weather and camera:
+		_weather.global_position = camera.get_screen_center_position()
+
+
 func _on_new_day(day_num: int) -> void:
+	for w in waystations:
+		w.on_new_day()
+	for v in get_tree().get_nodes_in_group("villagers"):
+		v.call("on_new_day")
 	# Heal player slightly each morning, and wake at the door
 	player.heal(40.0)
 	_teleport(WorldLayout.DOOR + Vector2(0, 40))
 	hud.banner("DAY %d" % day_num, WindfallTypes.Season.keys()[day_manager.current_season].capitalize(), WPal.CREAM[3])
-	SaveManager.save_game()
-	hud.toast("Game saved", WPal.LEAF[5])
+	if not Net.is_client():
+		SaveManager.save_game()
+		hud.toast("Game saved", WPal.LEAF[5])
 
 
 func _on_time_changed(phase: int, _day: int, _season: int) -> void:
+	_refresh_weather()
 	WindfallSound.set_ambience_night(phase == WindfallTypes.TimeOfDay.NIGHT_RAID)
 	if phase == WindfallTypes.TimeOfDay.EXPEDITION:
 		hud.banner("EXPEDITION", "Forage the eastern wilds for seeds and fruit", WPal.GOLD[3])
@@ -210,6 +354,7 @@ func get_save_data() -> Dictionary:
 			"stage": p.tree_stage, "species": String(p.planted_species_id), "graft": String(p.grafted_species_id),
 			"growth": p.growth_timer, "water": p.water_level, "pruned": p.is_pruned,
 			"fruit": p.fruit_count, "ripe": p.current_ripeness, "progress": p.ripeness_progress,
+			"locked": p.locked, "blight": p.has_blight,
 		})
 	var fruits: Array = []
 	for f in player.satchel_fruits:
@@ -223,11 +368,14 @@ func get_save_data() -> Dictionary:
 	return {
 		"day": day_manager.day_number, "season": day_manager.current_season,
 		"gold": market_manager.gold, "tool_level": market_manager.tool_level,
+		"plots_unlocked": market_manager.plots_unlocked, "compost": market_manager.compost,
 		"hp": player.current_health, "stomach_slots": player.max_stomach_slots,
 		"fruits": fruits, "seeds": seeds, "selected_seed": String(player.selected_seed_id),
 		"mastery": mastery, "rooted": player.rooted_skills.map(func(k): return String(k)), "plots": plots, "discovered": discovered.keys().map(func(k): return String(k)),
 		"tutorial_done": QuestManager.is_quest_completed(&"first_day") or tutorial == null,
+		"waystations": waystations.map(func(w): return w.get_save_data()),
 		"party": {"Wren": $World/Wren.is_in_party, "Hesper": $World/Hesper.is_in_party},
+		"affinity": {"Wren": $World/Wren.affinity, "Hesper": $World/Hesper.affinity},
 	}
 
 
@@ -235,6 +383,8 @@ func load_save_data(d: Dictionary) -> void:
 	day_manager.restore(int(d.get("day", 1)), WindfallTypes.TimeOfDay.MORNING, int(d.get("season", 0)))
 	market_manager.gold = int(d.get("gold", 150))
 	market_manager.tool_level = int(d.get("tool_level", 1))
+	market_manager.plots_unlocked = int(d.get("plots_unlocked", WorldLayout.STARTING_PLOTS))
+	market_manager.compost = int(d.get("compost", 0))
 	player.tool_level = market_manager.tool_level
 	market_manager.gold_changed.emit(market_manager.gold)
 	player.max_stomach_slots = int(d.get("stomach_slots", 4))
@@ -267,11 +417,19 @@ func load_save_data(d: Dictionary) -> void:
 		p.fruit_count = int(pd.get("fruit", 0))
 		p.current_ripeness = int(pd.get("ripe", 1))
 		p.ripeness_progress = float(pd.get("progress", 0.0))
+		p.locked = bool(pd.get("locked", p.locked))
+		p.has_blight = bool(pd.get("blight", false))
 	discovered.clear()
 	for k in d.get("discovered", []):
 		discovered[StringName(k)] = true
 	if bool(d.get("tutorial_done", true)) and not QuestManager.is_quest_completed(&"first_day"):
 		QuestManager.completed_quests.append(&"first_day")
+	var ws: Array = d.get("waystations", [])
+	for i in mini(ws.size(), waystations.size()):
+		waystations[i].load_save_data(ws[i])
+	var aff: Dictionary = d.get("affinity", {})
+	$World/Wren.affinity = int(aff.get("Wren", 10))
+	$World/Hesper.affinity = int(aff.get("Hesper", 10))
 	var party: Dictionary = d.get("party", {})
 	$World/Wren.is_in_party = bool(party.get("Wren", false))
 	$World/Hesper.is_in_party = bool(party.get("Hesper", false))

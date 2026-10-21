@@ -38,6 +38,7 @@ func bake_characters() -> void:
 		"wren": CharacterPainter.spec_wren(),
 		"hesper": CharacterPainter.spec_hesper(),
 		"poacher": CharacterPainter.spec_poacher(),
+		"reaper": CharacterPainter.spec_reaper(),
 	}
 	var p2 := CharacterPainter.spec_rootborn()
 	p2["coat"] = WPal.CLOTH_TEAL
@@ -148,6 +149,10 @@ func bake_props() -> void:
 	_save(PropPainter.reeds(), "props/reeds")
 	_save(PropPainter.stump(), "props/stump")
 	_save(PropPainter.scarecrow(), "props/scarecrow")
+	_save(PropPainter.overgrown_plot(), "props/overgrown_plot")
+	_save(PropPainter.compost_bin(), "props/compost_bin")
+	_save(PropPainter.waystation_ring(), "props/waystation_ring")
+	_save(PropPainter.waystation_shrine(), "props/waystation_shrine")
 	_save(PropPainter.well(), "props/well")
 	for v in 4:
 		_save(PropPainter.flower_patch(v), "props/flowers_%d" % v)
@@ -231,6 +236,9 @@ func bake_fx() -> void:
 	_save(FxPainter.shock_ring(), "fx/ring")
 	_save(FxPainter.butterfly_frames(), "fx/butterfly")
 	_save(FxPainter.ground_ring(), "fx/ground_ring")
+	_save(FxPainter.blight_overlay(), "fx/blight")
+	_save(FxPainter.petal(), "fx/petal")
+	_save(FxPainter.snowflake(), "fx/snowflake")
 	for fam in 8:
 		_save(FxPainter.projectile(fam), "fx/proj_%d" % fam)
 		_save(FxPainter.quickroot(fam), "fx/quickroot_%d" % fam)

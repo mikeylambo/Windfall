@@ -23,6 +23,11 @@ var carried_fruit: Dictionary = {}
 var has_eaten_fruit: bool = false
 var eaten_skill_id: StringName = &""
 var eaten_family: int = WindfallTypes.Family.STORM
+var eaten_families: Array[int] = []
+var stolen_fruits: Array[Dictionary] = []
+var _summoned: bool = false
+var _cast_i: int = 0
+signal boss_hp(current: float, max_val: float)
 var _skill_timer: float = 2.0
 var _attack_timer: float = 0.0
 
@@ -48,6 +53,8 @@ var _dying: bool = false
 var _next_crit: bool = false
 var _aura: Sprite2D
 var _status_timer: float = 0.0
+## Online client: AI off, state comes from host snapshots.
+var puppet: bool = false
 
 
 func _ready() -> void:
@@ -65,6 +72,11 @@ func _ready() -> void:
 func _physics_process(delta: float) -> void:
 	_anim_time += delta
 	if _dying:
+		return
+	if puppet:
+		if _flash_timer > 0.0:
+			_flash_timer -= delta
+		_update_visuals(delta)
 		return
 	_tick_statuses(delta)
 	if _flash_timer > 0.0:
@@ -107,9 +119,14 @@ func _physics_process(delta: float) -> void:
 	_update_visuals(delta)
 
 
+func is_elite() -> bool:
+	return enemy_type == EnemyType.REAPING_ELITE
+
+
 func _update_targeting() -> void:
 	# If hasn't eaten fruit, search for nearest ripe orchard tree!
-	if not has_eaten_fruit and carried_fruit.is_empty():
+	# The Reaping Elite keeps hunting until it has eaten two.
+	if not has_eaten_fruit and (carried_fruit.is_empty() or is_elite()):
 		var plots := get_tree().get_nodes_in_group("orchard_plots")
 		var closest_plot: OrchardPlot2D = null
 		var min_dist := 9999.0
@@ -140,9 +157,11 @@ func _attempt_steal_fruit(plot: OrchardPlot2D) -> void:
 
 
 func _eat_stolen_fruit() -> void:
-	has_eaten_fruit = true
 	eaten_skill_id = carried_fruit.get("species_id", &"voltberry")
 	eaten_family = int(carried_fruit.get("family", WindfallTypes.Family.STORM))
+	eaten_families.append(eaten_family)
+	stolen_fruits.append(carried_fruit)
+	has_eaten_fruit = not is_elite() or eaten_families.size() >= 2
 	WindfallSound.play_bite(eaten_family)
 	_eat_timer = 0.9
 	var c := WPal.element(eaten_family, 3)
@@ -163,19 +182,22 @@ func _eat_stolen_fruit() -> void:
 func _tick_stolen_skill(delta: float) -> void:
 	_skill_timer -= delta
 	if _skill_timer <= 0.0:
-		_skill_timer = 2.4
+		_skill_timer = 1.7 if is_elite() else 2.4
 		if target_node != null and is_instance_valid(target_node):
 			var dir := (target_node.global_position - global_position).normalized()
-			WindfallSound.play_spell(eaten_family)
-
-			# Launch elemental projectile toward player
-			var proj := ElementalProjectile.new()
-			proj.position = global_position + dir * 16.0
-			proj.setup(dir, attack_damage * 1.5, eaten_family, 360.0)
-			# Flag so it hits player, not enemies
-			proj.remove_from_group("player_attacks")
-			proj.hostile = true
-			get_parent().add_child(proj)
+			# the Elite alternates both stolen skills, in a three-way volley
+			var fam := eaten_family
+			if is_elite() and not eaten_families.is_empty():
+				fam = eaten_families[_cast_i % eaten_families.size()]
+				_cast_i += 1
+			WindfallSound.play_spell(fam)
+			var spread := [0.0] if not is_elite() else [-0.28, 0.0, 0.28]
+			for a in spread:
+				var proj := ElementalProjectile.new()
+				proj.position = global_position + dir.rotated(a) * 16.0
+				proj.setup(dir.rotated(a), attack_damage * 1.5, fam, 360.0)
+				proj.hostile = true
+				get_parent().add_child(proj)
 			_attack_anim = 0.25
 
 
@@ -195,6 +217,11 @@ func take_damage(amount: float) -> void:
 	_flash_timer = 0.12
 	_hurt_timer = 0.18
 	FX.damage_number(amount, global_position + Vector2(0, -26), -1, _next_crit)
+	if is_elite():
+		boss_hp.emit(maxf(current_health, 0.0), max_health)
+		if not _summoned and current_health < max_health * 0.5:
+			_summoned = true
+			_summon_gnawers()
 	_next_crit = false
 	var np := _nearest_player()
 	if np:
@@ -202,6 +229,46 @@ func take_damage(amount: float) -> void:
 
 	if current_health <= 0.0:
 		_die()
+
+
+func apply_net_state(r: Array) -> void:
+	var pos: Vector2 = r[2]
+	velocity = (pos - global_position) * 20.0
+	global_position = global_position.lerp(pos, 0.6)
+	var hp: float = r[3]
+	if hp < current_health - 0.01:
+		_flash_timer = 0.12
+		_hurt_timer = 0.15
+		FX.damage_number(current_health - hp, global_position + Vector2(0, -26))
+	current_health = hp
+	max_health = r[4]
+	if bool(r[5]) and not has_eaten_fruit:
+		has_eaten_fruit = true
+		eaten_family = int(r[6])
+		var mat := body_sprite.material as ShaderMaterial
+		mat.set_shader_parameter("rim_count", 1)
+		mat.set_shader_parameter("rim_a", WPal.element(eaten_family, 3))
+		mat.set_shader_parameter("rim_strength", 0.9)
+
+
+func puppet_die() -> void:
+	_dying = true
+	if _hp_bar: _hp_bar.visible = false
+	body_sprite.frame = Art.ROWS["collapse"] * 4 + 1
+	FX.poof(global_position + Vector2(0, -10))
+	var t := create_tween()
+	t.tween_property(self, "modulate:a", 0.0, 0.3)
+	t.tween_callback(queue_free)
+
+
+func _summon_gnawers() -> void:
+	FX.popup("RISE, GNAWERS!", global_position + Vector2(0, -80), WPal.RED[4], 18)
+	FX.ring(global_position, WPal.RED[3], 90.0, 0.5)
+	FX.shake(0.4)
+	var dm := get_tree().get_first_node_in_group("day_manager")
+	for k in 2:
+		if dm:
+			dm.call("spawn_enemy", EnemyType.GNAWER, global_position + Vector2(-40 + k * 80, 30))
 
 
 func set_next_hit_crit(v: bool) -> void:
@@ -247,8 +314,16 @@ func _die() -> void:
 	# Drop carried fruit and seeds for player
 	var p: RootbornPlayer = _nearest_player()
 	if p:
-		if not carried_fruit.is_empty():
-			p.satchel_fruits.append(carried_fruit)
+		for sf in stolen_fruits:
+			p.satchel_fruits.append(sf)
+		if is_elite():
+			for rare in [&"thunderplum", &"phoenix_pomegranate", &"lumen_lychee"]:
+				p.satchel_seeds[rare] = p.satchel_seeds.get(rare, 0) + 1
+			var m := get_tree().get_first_node_in_group("market") as MarketManager
+			if m:
+				m.gold += 150
+				m.gold_changed.emit(m.gold)
+			FX.popup("ELITE REAPED! +150g", global_position + Vector2(0, -70), WPal.GOLD[4], 22, 40.0, 1.6)
 		# 60% chance to drop a random seed
 		if randf() < 0.6:
 			var s_pool := [&"voltberry", &"cinderapple", &"rimepear", &"briarcherry", &"zephyr_kiwi"]
@@ -281,14 +356,19 @@ func _die() -> void:
 
 func _setup_visuals() -> void:
 	var gnawer := enemy_type == EnemyType.GNAWER
-	add_child(Art.shadow("small" if gnawer else "small"))
-	body_sprite = Art.actor_sprite("gnawer" if gnawer else "poacher")
+	add_child(Art.shadow("medium" if is_elite() else "small"))
+	body_sprite = Art.actor_sprite("gnawer" if gnawer else ("reaper" if is_elite() else "poacher"))
 	add_child(body_sprite)
+	if is_elite():
+		body_sprite.scale = Vector2(1.5, 1.5)
+		(body_sprite.material as ShaderMaterial).set_shader_parameter("outline_color", WPal.GOLD[3])
 	(body_sprite.material as ShaderMaterial).set_shader_parameter("outline_color", Color("ffcf4a") if gnawer else Color("ff8a4a"))
 	_hp_bar = Art.sprite("ui/hp_world_frame")
 	_hp_bar.centered = true
 	_hp_bar.offset = Vector2.ZERO
 	_hp_bar.position = Vector2(0, -52 if not gnawer else -38)
+	if is_elite():
+		_hp_bar.position.y = -84
 	_hp_bar.z_index = 30
 	add_child(_hp_bar)
 	_hp_fill = Art.sprite("ui/hp_world_fill")

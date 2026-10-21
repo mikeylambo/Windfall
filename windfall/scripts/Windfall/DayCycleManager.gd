@@ -6,6 +6,11 @@ signal raid_started(wave_number: int)
 signal raid_cleared(day_number: int)
 signal new_day_started(day_number: int)
 signal raid_progress(remaining: int, total: int)
+signal boss_spawned(enemy: PoacherEnemy2D)
+
+## A Reaping Elite leads the raid every 7th night.
+const ELITE_EVERY := 7
+var _elite_pending: bool = false
 
 @export var day_number: int = 1
 @export var current_phase: int = WindfallTypes.TimeOfDay.MORNING
@@ -60,6 +65,9 @@ func start_night_raid() -> void:
 	# Raid scales with day number
 	var count := 3 + int(day_number * 1.5)
 	enemies_left_to_spawn = count
+	_elite_pending = day_number % ELITE_EVERY == 0
+	if _elite_pending:
+		count += 1
 	raid_total = count
 	raid_progress.emit(count, count)
 	_spawn_timer = 1.0
@@ -80,7 +88,38 @@ func _process_raid_spawning(delta: float) -> void:
 			raid_cleared.emit(day_number)
 
 
+## Spawn a specific raider (used by the Elite's summon and tests).
+func spawn_enemy(kind: int, pos: Vector2) -> PoacherEnemy2D:
+	var e := PoacherEnemy2D.new()
+	e.enemy_type = kind
+	match kind:
+		PoacherEnemy2D.EnemyType.GNAWER:
+			e.speed = 130.0
+			e.max_health = 45.0
+		PoacherEnemy2D.EnemyType.REAPING_ELITE:
+			e.speed = 80.0
+			e.max_health = 420.0 + day_number * 20.0
+			e.attack_damage = 22.0
+		_:
+			e.max_health = 70.0 + day_number * 5.0
+	e.position = pos
+	e.died.connect(_on_enemy_died)
+	active_raid_enemies.append(e)
+	var parent: Node = FX.world if FX.world else get_parent()
+	parent.add_child(e)
+	FX.poof(e.global_position + Vector2(0, -10), WPal.CLOTH_PLUM[3])
+	if kind == PoacherEnemy2D.EnemyType.REAPING_ELITE:
+		boss_spawned.emit(e)
+	raid_progress.emit(active_raid_enemies.size() + enemies_left_to_spawn, raid_total)
+	return e
+
+
 func _spawn_raid_enemy() -> void:
+	if _elite_pending and enemies_left_to_spawn <= raid_total / 2:
+		_elite_pending = false
+		var sp: Array = WorldLayout.RAID_SPAWNS
+		spawn_enemy(PoacherEnemy2D.EnemyType.REAPING_ELITE, sp[randi() % sp.size()])
+		return
 	var enemy := PoacherEnemy2D.new()
 	# Random spawn location around edges of orchard
 	var spawn_points: Array = WorldLayout.RAID_SPAWNS
@@ -126,6 +165,8 @@ func start_next_day() -> void:
 
 func _tick_orchard_daily() -> void:
 	var plots := get_tree().get_nodes_in_group("orchard_plots")
+	for pl in plots:
+		pl.call("roll_blight")
 	var hybrid_chance := 0.35
 	for v in get_tree().get_nodes_in_group("villagers"):
 		hybrid_chance += float(v.call("hive_bonus"))

@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://c7k0x2w94a1fl"]
+[gd_scene load_steps=15 format=3 uid="uid://c7k0x2w94a1fl"]
 
 [ext_resource type="Script" path="res://scripts/Windfall/WindfallMain.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/Windfall/RootbornPlayer.gd" id="2_player"]
@@ -13,6 +13,7 @@
 [ext_resource type="Script" path="res://scripts/Windfall/ExpeditionGate.gd" id="11_gate"]
 [ext_resource type="Script" path="res://scripts/Windfall/World/DayLighting.gd" id="12_light"]
 [ext_resource type="Script" path="res://scripts/Windfall/World/CameraRig.gd" id="13_cam"]
+[ext_resource type="Script" path="res://scripts/Windfall/CompostBin.gd" id="14_compost"]
 
 [node name="WindfallMain" type="Node2D"]
 script = ExtResource("1_main")
@@ -89,6 +90,31 @@ script = ExtResource("3_plot")
 plot_index = 5
 soil_type = 5
 
+[node name="Plot_6" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(720, 750)
+script = ExtResource("3_plot")
+plot_index = 6
+soil_type = 1
+locked = true
+
+[node name="Plot_7" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(840, 750)
+script = ExtResource("3_plot")
+plot_index = 7
+soil_type = 3
+locked = true
+
+[node name="Plot_8" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(960, 750)
+script = ExtResource("3_plot")
+plot_index = 8
+soil_type = 2
+locked = true
+
+[node name="CompostBin" type="Area2D" parent="World"]
+position = Vector2(610, 580)
+script = ExtResource("14_compost")
+
 [node name="Wren" type="CharacterBody2D" parent="World"]
 position = Vector2(600, 640)
 script = ExtResource("9_villager")
@@ -99,7 +125,7 @@ loved_flavor = "Sour"
 hated_flavor = "Sweet"
 
 [node name="Hesper" type="CharacterBody2D" parent="World"]
-position = Vector2(1110, 690)
+position = Vector2(1130, 830)
 script = ExtResource("9_villager")
 villager_name = "Hesper"
 village_job = "Beekeeper"

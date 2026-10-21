@@ -40,6 +40,15 @@ static func spec_hesper() -> Dictionary:
 	}
 
 
+## Reaping Elite: the raid boss. Crimson-trimmed black cloak, gold eyes.
+static func spec_reaper() -> Dictionary:
+	return {
+		"skin": WPal.CLOTH_DARK, "coat": [Color("0e0a12"), Color("1c1420"), Color("2e2030"), Color("4a3040"), Color("6e2a3a")],
+		"trim": WPal.RED, "pants": WPal.CLOTH_DARK, "boots": WPal.CLOTH_DARK, "hair": WPal.CLOTH_DARK,
+		"head": "hood", "body": "cloak", "satchel": false, "eye": WPal.GOLD[4], "sack": true, "scarf": WPal.RED,
+	}
+
+
 static func spec_poacher() -> Dictionary:
 	return {
 		"skin": WPal.CLOTH_DARK, "coat": WPal.CLOTH_PLUM, "trim": WPal.CLOTH_DARK, "pants": WPal.CLOTH_DARK,

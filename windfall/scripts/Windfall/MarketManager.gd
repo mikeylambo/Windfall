@@ -3,12 +3,14 @@ class_name MarketManager
 
 signal gold_changed(new_gold: int)
 signal transaction_completed(message: String)
+signal compost_changed(amount: int)
 
 @export var gold: int = 150
 
 # Land plot expansion cost
 var land_expansion_cost: int = 120
 var plots_unlocked: int = 6
+var compost: int = 0
 
 # Upgrades
 var tool_level: int = 1
@@ -29,7 +31,28 @@ var seed_shop: Dictionary = {
 
 
 func _ready() -> void:
+	add_to_group("market")
 	gold_changed.emit(gold)
+
+
+## Land expansion: each overgrown plot costs more than the last.
+func land_cost() -> int:
+	return land_expansion_cost + (plots_unlocked - WorldLayout.STARTING_PLOTS) * 60
+
+
+func expand_land(plot: OrchardPlot2D) -> bool:
+	var cost := land_cost()
+	if gold < cost:
+		transaction_completed.emit("Need %d Gold to clear this land" % cost)
+		HUDBus.toast("Need %d Gold to clear this land" % cost, WPal.RED[4])
+		return false
+	gold -= cost
+	gold_changed.emit(gold)
+	plots_unlocked += 1
+	plot.unlock()
+	WindfallSound.play_prime_timing()
+	transaction_completed.emit("Cleared new orchard land (%d plots)" % plots_unlocked)
+	return true
 
 
 func sell_fruit(fruit_instance: Dictionary) -> int:
@@ -41,6 +64,7 @@ func sell_fruit(fruit_instance: Dictionary) -> int:
 	# Trait bonus: Sweet sells for double
 	if "Sweet" in fruit_instance.get("traits", []):
 		val *= 2
+	val = int(val * Seasons.price_mult())
 
 	gold += val
 	gold_changed.emit(gold)

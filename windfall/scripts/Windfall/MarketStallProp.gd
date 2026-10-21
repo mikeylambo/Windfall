@@ -32,6 +32,9 @@ func get_prompt() -> String:
 func interact(_player: RootbornPlayer) -> void:
 	if market_manager == null:
 		return
+	if _player.is_remote():
+		HUDBus.toast("Player %d is browsing the market (host trades in online play)" % (_player.player_index + 1), WPal.CREAM[3])
+		return
 	HUDBus.open_menu("market")
 
 

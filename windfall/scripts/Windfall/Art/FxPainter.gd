@@ -240,3 +240,30 @@ static func ground_ring() -> PixelCanvas:
 			if d <= 1.0 and d >= 0.74:
 				c.px(x, y, Color(1, 1, 1, 0.9 if d > 0.86 else 0.45))
 	return c
+
+
+## Blight spots: sickly speckle overlay for a canopy (48 x 64, same canvas).
+static func blight_overlay() -> PixelCanvas:
+	var c := PixelCanvas.new(48, 64, 2100)
+	var cols := [Color("5a4a6a"), Color("7a6a3a"), Color("3a2a3a")]
+	for i in 70:
+		var x := c.rng.randi_range(6, 41)
+		var y := c.rng.randi_range(10, 40)
+		c.px(x, y, cols[i % 3])
+		if i % 4 == 0:
+			c.px(x + 1, y, cols[(i + 1) % 3])
+	return c
+
+
+static func petal() -> PixelCanvas:
+	var c := PixelCanvas.new(4, 3)
+	c.rect(0, 0, 3, 2, Color.WHITE)
+	c.px(3, 1, Color(1, 1, 1, 0.8))
+	c.px(1, 2, Color(1, 1, 1, 0.8))
+	return c
+
+
+static func snowflake() -> PixelCanvas:
+	var c := PixelCanvas.new(3, 3)
+	c.px(1, 0, Color.WHITE); c.px(0, 1, Color.WHITE); c.px(1, 1, Color.WHITE); c.px(2, 1, Color.WHITE); c.px(1, 2, Color.WHITE)
+	return c

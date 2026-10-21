@@ -30,3 +30,13 @@ static func sleep_transition(on_black: Callable) -> void:
 static func say(speaker: String, lines: Array, on_done: Callable = Callable()) -> void:
 	var h := _hud()
 	if h: h.call("say", speaker, lines, on_done)
+
+
+static func ask(speaker: String, lines: Array, choices: Array, on_choice: Callable) -> void:
+	var h := _hud()
+	if h: h.call("ask", speaker, lines, choices, on_choice)
+
+
+static func open_gift(villager: Node) -> void:
+	var h := _hud()
+	if h: h.call("open_gift", villager)

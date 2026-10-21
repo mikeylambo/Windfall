@@ -106,13 +106,13 @@ func _orchard_fence() -> void:
 	for y in [r.position.y, r.end.y]:
 		var x := r.position.x
 		while x < r.end.x:
-			if not (y == r.end.y and absf(x - 840.0) < 36.0):
+			if not (y == r.end.y and absf(x - 780.0) < 30.0):
 				_add("props/fence_h", Vector2(x, y), Vector2(0, 26))
 			x += 32.0
 	_blocker(Vector2(r.position.x + r.size.x * 0.5, r.position.y - 6), Vector2(r.size.x, 8))
 	# bottom rail blockers either side of the south gap
-	_blocker(Vector2((r.position.x + 804.0) * 0.5, r.end.y - 6), Vector2(804.0 - r.position.x, 8))
-	_blocker(Vector2((876.0 + r.end.x) * 0.5, r.end.y - 6), Vector2(r.end.x - 876.0, 8))
+	_blocker(Vector2((r.position.x + 750.0) * 0.5, r.end.y - 6), Vector2(750.0 - r.position.x, 8))
+	_blocker(Vector2((810.0 + r.end.x) * 0.5, r.end.y - 6), Vector2(r.end.x - 810.0, 8))
 	# side posts with path gaps
 	for x in [r.position.x, r.end.x]:
 		var y := r.position.y + 24.0
@@ -163,7 +163,11 @@ func _border_forest() -> void:
 	# scattered wild trees in the eastern wilds
 	for i in 26:
 		var p := Vector2(rng.randf_range(WorldLayout.WILDS.position.x, WorldLayout.WILDS.end.x), rng.randf_range(WorldLayout.WILDS.position.y, WorldLayout.WILDS.end.y))
-		if WorldLayout.dist_to_paths(p) > 60.0:
+		var near_way := false
+		for w in WorldLayout.WAYSTATIONS:
+			if p.distance_to(w) < 110.0:
+				near_way = true
+		if WorldLayout.dist_to_paths(p) > 60.0 and not near_way:
 			_tree(p)
 			_blocker(p + Vector2(0, -6), Vector2(14, 10))
 

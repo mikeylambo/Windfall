@@ -104,6 +104,15 @@ func refresh() -> void:
 		2:
 			var sc := 150 + _player.max_stomach_slots * 50
 			rows.append(_row("icons/stomach", "Stomach Expansion", "%d → %d slots" % [_player.max_stomach_slots, mini(_player.max_stomach_slots + 1, 8)], "%dg" % sc, func(): _market.buy_stomach_upgrade(_player), _market.gold >= sc and _player.max_stomach_slots < 8))
+			var locked_plot: OrchardPlot2D = null
+			for pl in get_tree().get_nodes_in_group("orchard_plots"):
+				if pl.locked:
+					locked_plot = pl
+					break
+			if locked_plot:
+				var lc := _market.land_cost()
+				var lp := locked_plot
+				rows.append(_row("icons/seed_4", "Expand the Orchard", "Clear one overgrown plot · %d / 9 plots" % _market.plots_unlocked, "%dg" % lc, func(): _market.expand_land(lp), _market.gold >= lc))
 			var tc := 100 * _market.tool_level
 			rows.append(_row("icons/tool_1", "Tool Upgrade", "Tier %d → %d · +20%% damage" % [_market.tool_level, _market.tool_level + 1], "%dg" % tc, _buy_tool, _market.gold >= tc))
 		3:
@@ -140,7 +149,8 @@ func refresh() -> void:
 
 func _price(f: Dictionary) -> int:
 	var val := int(int(f.get("market_value", 20)) * float(WindfallTypes.RIPENESS_MULTIPLIERS.get(int(f.get("ripeness", 2)), 1.0)))
-	return val * 2 if "Sweet" in f.get("traits", []) else val
+	val = val * 2 if "Sweet" in f.get("traits", []) else val
+	return int(val * Seasons.price_mult())
 
 
 func _sell(idx: int) -> void:

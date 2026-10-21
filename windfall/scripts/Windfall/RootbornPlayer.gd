@@ -67,6 +67,12 @@ var input_locked: bool = false
 var input: PlayerInput = PlayerInput.new(-1, true)
 var player_index: int = 0
 var sheet: String = "rootborn"
+## Online client: this body is driven by host snapshots, not local physics.
+var puppet: bool = false
+
+
+func is_remote() -> bool:
+	return input is NetworkInput
 var tool_level: int = 1
 var body_sprite: Sprite2D
 var tool_sprite: Sprite2D
@@ -159,6 +165,8 @@ func _setup_default_satchel() -> void:
 
 func _physics_process(delta: float) -> void:
 	_anim_time += delta
+	if puppet:
+		return
 	input.poll()
 
 	# Hitstop freeze frame
@@ -953,3 +961,40 @@ func _bite_feedback(fam: int) -> void:
 
 func set_respawn_point(p: Vector2) -> void:
 	_respawn_point = p
+
+
+## Online client: apply one replicated player record from the host snapshot.
+func apply_net_state(r: Array) -> void:
+	var pos: Vector2 = r[1]
+	global_position = pos if global_position.distance_to(pos) > 96.0 else global_position.lerp(pos, 0.5)
+	facing_direction = r[2]
+	velocity = r[3]
+	var hp: float = r[4]
+	if absf(hp - current_health) > 0.01:
+		if hp < current_health:
+			_damage_flash_timer = 0.14
+			_hurt_timer = 0.2
+		current_health = hp
+		health_updated.emit(current_health, max_health)
+	is_rolling = r[5]
+	is_attacking = r[6]
+	is_eating = r[7]
+	if int(r[8]) != current_tool:
+		current_tool = int(r[8])
+		tool_changed.emit(current_tool)
+	var dig: Array = r[9]
+	var changed := dig.size() != digesting_fruits.size()
+	if not changed:
+		for i in dig.size():
+			if StringName(dig[i][0]) != digesting_fruits[i].get("species_id"):
+				changed = true
+	if changed:
+		digesting_fruits.clear()
+		for d in dig:
+			var f := FruitRegistry.create_fruit_instance(StringName(d[0]))
+			digesting_fruits.append(f)
+		_update_pairings()
+		stomach_changed.emit()
+	for i in mini(dig.size(), digesting_fruits.size()):
+		digesting_fruits[i]["remaining_duration"] = float(dig[i][1])
+		digesting_fruits[i]["digestion_duration"] = float(dig[i][2])
