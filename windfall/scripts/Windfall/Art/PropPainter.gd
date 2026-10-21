@@ -298,3 +298,59 @@ static func blob_shadow(rx: int, ry: int) -> PixelCanvas:
 	var c := PixelCanvas.new(rx * 2 + 2, ry * 2 + 2)
 	c.ellipse(rx + 1, ry + 1, rx, ry, WPal.SHADOW)
 	return c
+
+
+## Scarecrow 24 x 40, base (12, 39).
+static func scarecrow() -> PixelCanvas:
+	var c := PixelCanvas.new(26, 42, 1400)
+	c.shade_box(12, 12, 2, 30, WPal.WOOD.slice(1, 5))
+	c.shade_box(2, 15, 22, 2, WPal.WOOD.slice(1, 5))
+	# patched shirt
+	c.shade_box(7, 14, 12, 12, WPal.CLOTH_BLUE.slice(1, 5))
+	c.rect(9, 18, 3, 3, WPal.RED[3])
+	c.hline(7, 18, 25, WPal.CREAM[1])
+	for x in [7, 10, 13, 16, 18]:
+		c.vline(x, 26, 28, WPal.GOLD[2])  # straw tufts
+	c.px(2, 17, WPal.GOLD[3]); c.px(23, 17, WPal.GOLD[3])
+	# sack head + straw hat
+	c.shade_ellipse(13, 9, 4.5, 4.5, WPal.CREAM.slice(0, 3))
+	c.px(11, 9, WPal.INK); c.px(15, 9, WPal.INK)
+	c.hline(11, 15, 11, WPal.WOOD[2])
+	c.shade_ellipse(13, 5.5, 8, 2, WPal.GOLD.slice(1, 4))
+	c.shade_ellipse(13, 3.5, 4, 2.4, WPal.GOLD.slice(1, 4))
+	c.outline(WPal.OUTLINE, 0.6)
+	return c
+
+
+## Stone well with a little roof, 28 x 36, base (14, 35).
+static func well() -> PixelCanvas:
+	var c := PixelCanvas.new(30, 38, 1500)
+	c.shade_ellipse(15, 29, 12, 7, WPal.STONE.slice(1, 5))
+	c.ellipse(15, 27, 8.5, 4, WPal.WATER[1])
+	c.px(12, 26, WPal.WATER[4])
+	for y in range(30, 36):
+		c.hline(4, 25, y, WPal.STONE[2] if (y % 3) else WPal.STONE[1])
+	c.shade_box(4, 8, 2, 22, WPal.WOOD.slice(1, 5))
+	c.shade_box(24, 8, 2, 22, WPal.WOOD.slice(1, 5))
+	c.poly(PackedVector2Array([Vector2(1, 10), Vector2(15, 1), Vector2(29, 10)]), WPal.ROOF[2])
+	c.hline(1, 28, 10, WPal.ROOF[0])
+	c.hline(6, 24, 14, WPal.WOOD[3])
+	c.vline(15, 14, 20, WPal.STONE[3])
+	c.shade_box(13, 20, 4, 3, WPal.WOOD.slice(2, 6))
+	c.outline(WPal.OUTLINE, 0.6)
+	return c
+
+
+## Wildflower patch 20 x 12 (variant picks a colour pair).
+static func flower_patch(variant: int) -> PixelCanvas:
+	var c := PixelCanvas.new(22, 14, 1600 + variant)
+	var pairs := [[Color("fff7e6"), Color("f2c94e")], [Color("ff9bb4"), Color("fff0a0")], [Color("b9a4ff"), Color("fff7e6")], [Color("f2c94e"), Color("d9784e")]]
+	var pair: Array = pairs[variant % pairs.size()]
+	for i in 9:
+		var x := c.rng.randi_range(2, 19)
+		var y := c.rng.randi_range(4, 12)
+		c.vline(x, y, mini(y + 2, 13), WPal.LEAF[2])
+		c.px(x, y, pair[0]); c.px(x + 1, y, pair[0]); c.px(x, y - 1, pair[0])
+		c.px(x + 1, y - 1, pair[1])
+	c.outline(WPal.OUTLINE, 0.4)
+	return c

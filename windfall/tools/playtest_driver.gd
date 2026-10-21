@@ -56,6 +56,8 @@ func run(main: WindfallMain, t: SceneTree) -> void:
 	await secs(1.0)
 	await finish_dialogue()
 	check(QuestManager.is_quest_active(&"first_day"), "tutorial quest accepted")
+	await secs(2.0)
+	await shot("01_orchard_day")
 
 	# ── morning: water, harvest PRIME, eat, cast ───────────────────────────
 	var plots := main.initial_plots
@@ -86,10 +88,6 @@ func run(main: WindfallMain, t: SceneTree) -> void:
 	check(p.satchel_fruits.size() == before + 1, "fruit harvested into satchel")
 	check(int(p.satchel_fruits[-1].get("ripeness", 0)) == WindfallTypes.Ripeness.PRIME, "PRIME quality awarded")
 
-	# orchard by day, wide view
-	p.global_position = Vector2(940, 600)
-	await secs(1.6)
-	await shot("01_orchard_day")
 
 	# eat a three-fruit combo (Storm + Tide => Conductive)
 	p.satchel_fruits.insert(0, FruitRegistry.create_fruit_instance(&"brinemelon", WindfallTypes.Ripeness.PRIME))
@@ -118,11 +116,50 @@ func run(main: WindfallMain, t: SceneTree) -> void:
 	await shot("07_market")
 	hud.close_menu()
 
+	# ── GDD systems built in pass 2 ────────────────────────────────────────
+	var jam := main.market_manager.make_jam(FruitRegistry.create_fruit_instance(&"voltberry"), FruitRegistry.create_fruit_instance(&"brinemelon"))
+	var saved_stomach := p.digesting_fruits.duplicate()
+	p.digesting_fruits.clear()
+	p.eat_fruit(jam)
+	check(WindfallTypes.PairingEffect.CONDUCTIVE in p.active_pairings, "jam pairs itself (Storm+Tide → Conductive)")
+	p.digesting_fruits.assign(saved_stomach)
+	p._update_pairings()
+	var packed := WindfallMain._pack_fruit(jam)
+	check(main._unpack_fruit(packed).get("slots") == 1 and main._unpack_fruit(packed).has("jam_family"), "jam survives save round-trip")
+	var hplot: OrchardPlot2D = plots[3]
+	hplot.grafted_species_id = &"plasma_plum"
+	hplot.fruit_count = maxi(hplot.fruit_count, 1)
+	hplot.current_ripeness = WindfallTypes.Ripeness.RIPE
+	await secs(0.2)
+	hplot._harvest_fruit(p, WindfallTypes.Ripeness.RIPE)
+	check(p.satchel_fruits[-1].get("species_id") == &"plasma_plum", "cross-pollinated hybrid is harvestable")
+	check(main.discovered.has(&"plasma_plum"), "hybrid discovered in Codex")
+
+	# ── village party ──────────────────────────────────────────────────────
+	var hesper: VillagerCompanion2D = main.get_node("World/Hesper")
+	hesper.interact(p)
+	await finish_dialogue()
+	await secs(0.3)
+	check(hesper.is_in_party, "Hesper joined the party")
+	p.take_damage(30.0)
+	await secs(4.5)
+	check(p.current_health > p.max_health - 30.0, "Hesper (support) healed the player")
+
+	# ── local co-op: a second pad drops in ─────────────────────────────────
+	var p2: RootbornPlayer = main.coop.add_player(7)
+	await secs(0.8)
+	check(p2 != null and main.coop.players.size() == 2, "P2 joined on a new gamepad")
+	check(p2.satchel_fruits == p.satchel_fruits, "co-op satchel is shared")
+	p2.input.apply_intent({"m": [1.0, 0.0], "p": []})
+	await secs(0.05)
+	await shot("10_coop")
+
 	# ── expedition ─────────────────────────────────────────────────────────
 	var gate: ExpeditionGate = main.get_node("World/Gate")
 	gate.interact(p)
 	await secs(1.0)
 	check(dm.current_phase == WindfallTypes.TimeOfDay.EXPEDITION, "gate starts expedition")
+	check(hesper.global_position.distance_to(p.global_position) < 120.0, "party companion travels with you")
 	await secs(2.0)
 	await shot("08_expedition")
 
@@ -136,12 +173,28 @@ func run(main: WindfallMain, t: SceneTree) -> void:
 	for sid in [&"voltberry", &"brinemelon", &"cinderapple"]:
 		p.eat_fruit(FruitRegistry.create_fruit_instance(sid, WindfallTypes.Ripeness.PRIME))
 		await secs(0.35)
+	# staged mid-spell shot: three raiders close in while the player casts
+	dm.enemies_left_to_spawn = maxi(dm.enemies_left_to_spawn - 3, 0)
+	var offsets := [Vector2(110, -20), Vector2(150, 36), Vector2(90, 70)]
+	for k in 3:
+		dm._spawn_raid_enemy()
+		dm.active_raid_enemies[-1].global_position = p.global_position + offsets[k]
+		if k == 1:
+			dm.active_raid_enemies[-1].enemy_type = PoacherEnemy2D.EnemyType.POACHER
+	main.camera.reset_smoothing()
+	await secs(0.5)
+	p.facing_direction = Vector2.RIGHT
+	p._skill_cooldowns = {1: 0.0, 2: 0.0, 3: 0.0}
+	p._cast_fruit_skill(2, 3)
+	await secs(0.12)
+	await shot("02_night_raid")
+	await shot("04_stomach_combo")
 	# let raiders arrive, fight with skills
+	var shots_taken := 1
 	var t0 := Time.get_ticks_msec()
 	var min_fps := 999.0
 	var fps_samples: Array = []
 	var cpu_samples: Array = []
-	var shots_taken := 0
 	while (dm.is_raid_active) and Time.get_ticks_msec() - t0 < 70000:
 		await secs(0.6)
 		fps_samples.append(Engine.get_frames_per_second())

@@ -7,12 +7,18 @@ extends Node
 ## Glows and popups live on an overlay CanvasLayer that follows the camera but
 ## is NOT darkened by the night CanvasModulate, so element colours pop at night.
 
-const FONT := preload("res://assets/fonts/PixelifySans-Bold.woff2")
+const FONT := preload("res://assets/fonts/Jersey10.woff2")
 
 var world: Node2D = null          # y-sorted world root (set by WindfallMain)
 var overlay: CanvasLayer = null   # unlit overlay for glows / popups
 var night: float = 0.0            # 0 = day, 1 = deep night (set by DayLighting)
 var _glows: Array = []
+
+## Master dial for light intensity. Combat glows were drowning sprites at
+## night; everything additive is scaled through these.
+const GLOW_SCALE := 0.75
+const FLASH_SCALE := 0.5
+const ADDITIVE_PARTICLE_ALPHA := 0.38
 
 
 func _ready() -> void:
@@ -64,6 +70,7 @@ func glow(host: Node2D, color: Color, radius: float, offset := Vector2.ZERO, day
 	s.material = mat
 	s.modulate = Color(color, 0.0)
 	s.scale = Vector2.ONE * (radius * 2.0 / 64.0)
+	alpha *= GLOW_SCALE
 	overlay.add_child(s)
 	s.global_position = host.global_position + offset
 	_glows.append({"sprite": s, "host": host, "offset": offset, "base_alpha": alpha, "day_alpha": day_alpha, "pulse": randf_range(1.5, 3.0), "seed": randf() * 10.0})
@@ -80,6 +87,8 @@ func set_glow_offset(s: Sprite2D, offset: Vector2) -> void:
 func flash_light(pos: Vector2, color: Color, radius: float, dur: float = 0.25) -> void:
 	if overlay == null:
 		return
+	color = Color(color, color.a * FLASH_SCALE)
+	radius *= 0.75
 	var s := Sprite2D.new()
 	s.texture = Art.glow_texture()
 	var mat := CanvasItemMaterial.new()
@@ -102,10 +111,10 @@ func popup(text: String, pos: Vector2, color: Color, size: int = 16, rise: float
 	var l := Label.new()
 	l.text = text
 	l.add_theme_font_override("font", FONT)
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", UITheme.world_px(size))
 	l.add_theme_color_override("font_color", color)
 	l.add_theme_color_override("font_outline_color", WPal.OUTLINE)
-	l.add_theme_constant_override("outline_size", maxi(4, size / 3))
+	l.add_theme_constant_override("outline_size", 3 if size < 20 else 4)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.size = Vector2(160, size + 8)
 	l.pivot_offset = l.size * 0.5
@@ -154,6 +163,8 @@ func burst(pos: Vector2, tex_path: String, color: Color, amount: int, speed: flo
 	p.damping_max = speed * 1.2
 	p.scale_amount_min = scale_range.x
 	p.scale_amount_max = scale_range.y
+	if additive:
+		color = Color(color, color.a * ADDITIVE_PARTICLE_ALPHA)
 	var g := Gradient.new()
 	g.set_color(0, color)
 	g.set_color(1, color_end if color_end.a > 0.0 else Color(color.r, color.g, color.b, 0.0))
@@ -183,7 +194,7 @@ func element_burst(fam: int, pos: Vector2, power: float = 1.0) -> void:
 			burst(pos, "fx/spark", WPal.element(fam, 4), n, 160.0 * power, 0.35, Vector2.ZERO, 180.0, Vector2.UP, Vector2(1, 2), "overlay", Color(0,0,0,0), true)
 			burst(pos, "fx/shard", c, n / 2, 110.0, 0.3)
 		WindfallTypes.Family.EMBER:
-			burst(pos, "fx/dot4", WPal.element(fam, 4), n, 120.0 * power, 0.45, Vector2.ZERO, 180.0, Vector2.UP, Vector2(0.8, 1.8), "overlay", WPal.element(fam, 1), true)
+			burst(pos, "fx/dot4", WPal.element(fam, 3), n, 120.0 * power, 0.4, Vector2.ZERO, 180.0, Vector2.UP, Vector2(0.6, 1.3), "overlay", WPal.element(fam, 1), true)
 			burst(pos, "fx/dot", c, n, 50.0, 1.1, Vector2(0, -70), 50.0, Vector2.UP, Vector2(1, 2), "overlay", Color(0,0,0,0), true)  # rising embers
 		WindfallTypes.Family.FROST:
 			burst(pos, "fx/shard", WPal.element(fam, 4), n, 140.0 * power, 0.45, Vector2(0, 120), 180.0, Vector2.UP, Vector2(1, 2))
@@ -200,7 +211,7 @@ func element_burst(fam: int, pos: Vector2, power: float = 1.0) -> void:
 			burst(pos, "fx/dot4", WPal.element(fam, 1), n, 70.0 * power, 0.7, Vector2(0, -30), 180.0, Vector2.UP, Vector2(1, 2))
 		_:
 			burst(pos, "fx/spark", WPal.element(fam, 4), n, 110.0 * power, 0.5, Vector2.ZERO, 180.0, Vector2.UP, Vector2(1, 2), "overlay", Color(0,0,0,0), true)
-	flash_light(pos, c, 40.0 * power, 0.3)
+	flash_light(pos, c, 34.0 * power, 0.25)
 
 
 func ring(pos: Vector2, color: Color, radius: float, dur: float = 0.35) -> void:
@@ -273,8 +284,8 @@ func _bolt(root: Node2D, a: Vector2, b: Vector2, color: Color, width: float, dep
 	for k in 2:
 		var line := Line2D.new()
 		line.points = pts
-		line.width = width * (2.4 if k == 0 else 1.0)
-		line.default_color = Color(color, 0.45) if k == 0 else Color(1, 1, 1, 0.95).lerp(color, 0.3)
+		line.width = width * (2.0 if k == 0 else 0.8)
+		line.default_color = Color(color, 0.3) if k == 0 else Color(1, 1, 1, 0.85).lerp(color, 0.45)
 		line.joint_mode = Line2D.LINE_JOINT_SHARP
 		var m := CanvasItemMaterial.new()
 		m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD

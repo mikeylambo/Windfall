@@ -5,9 +5,27 @@ class_name UITheme
 ## tools/bake_art.gd saves it to res://assets/ui/windfall_theme.tres, which is
 ## set as the project-wide custom theme so every Control uses it.
 
-const FONT_PATH := "res://assets/fonts/PixelifySans-Regular.woff2"
-const FONT_BOLD_PATH := "res://assets/fonts/PixelifySans-Bold.woff2"
-const FONT_TITLE_PATH := "res://assets/fonts/Silkscreen-Regular.woff2"
+## Jersey 10 (body/HUD, 10px grid) and Jersey 15 (display, 15px grid), both OFL.
+## Sizes are always snapped to integer multiples of the design grid so every
+## glyph lands on whole pixels; never pass a raw size to a font override.
+const FONT_PATH := "res://assets/fonts/Jersey10.woff2"
+const FONT_BOLD_PATH := "res://assets/fonts/Jersey10.woff2"
+const FONT_TITLE_PATH := "res://assets/fonts/Jersey15.woff2"
+
+
+## Snap a requested UI body size to the Jersey 10 grid (20, 30, 40...).
+static func body_px(requested: int) -> int:
+	return maxi(20, int(round(requested / 10.0)) * 10)
+
+
+## Snap a requested display size to the Jersey 15 grid (30, 45, 60, 90...).
+static func display_px(requested: int) -> int:
+	return maxi(30, int(round(requested / 15.0)) * 15)
+
+
+## World-space text is magnified 2x by the camera, so use the native grid.
+static func world_px(requested: int) -> int:
+	return 10 if requested < 20 else 20
 
 const CREAM := Color("fff2d6")
 const CREAM_DIM := Color("cdb48c")
@@ -91,19 +109,19 @@ static func build() -> Theme:
 	t.set_font("bold_font", "RichTextLabel", load(FONT_BOLD_PATH))
 	t.set_type_variation("HeaderLabel", "Label")
 	t.set_font("font", "HeaderLabel", load(FONT_TITLE_PATH))
-	t.set_font_size("font_size", "HeaderLabel", 24)
+	t.set_font_size("font_size", "HeaderLabel", 30)
 	t.set_color("font_color", "HeaderLabel", GOLD)
 	t.set_constant("outline_size", "HeaderLabel", 6)
 	t.set_type_variation("DimLabel", "Label")
 	t.set_color("font_color", "DimLabel", CREAM_DIM)
-	t.set_font_size("font_size", "DimLabel", 14)
+	t.set_font_size("font_size", "DimLabel", 20)
 	t.set_type_variation("InkLabel", "Label")
 	t.set_color("font_color", "InkLabel", OUTLINE)
 	t.set_constant("outline_size", "InkLabel", 0)
 
 	# tooltip text
 	t.set_color("font_color", "TooltipLabel", CREAM)
-	t.set_font_size("font_size", "TooltipLabel", 14)
+	t.set_font_size("font_size", "TooltipLabel", 20)
 
 	# sliders
 	var groove := StyleBoxFlat.new()

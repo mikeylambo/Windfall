@@ -23,6 +23,7 @@ var raid_total: int = 0
 
 
 func _ready() -> void:
+	add_to_group("day_manager")
 	time_changed.emit(current_phase, day_number, current_season)
 
 
@@ -51,6 +52,10 @@ func start_night_raid() -> void:
 	time_changed.emit(current_phase, day_number, current_season)
 
 	WindfallSound.play_raid_horn()
+	# Wren on watch calls out the raid's direction
+	for v in get_tree().get_nodes_in_group("villagers"):
+		if v.call("is_guard") and not v.get("is_in_party"):
+			HUDBus.toast("Wren: Raiders in the treeline! I'll hold the orchard.", WPal.CLOTH_BLUE[4])
 
 	# Raid scales with day number
 	var count := 3 + int(day_number * 1.5)
@@ -121,6 +126,9 @@ func start_next_day() -> void:
 
 func _tick_orchard_daily() -> void:
 	var plots := get_tree().get_nodes_in_group("orchard_plots")
+	var hybrid_chance := 0.35
+	for v in get_tree().get_nodes_in_group("villagers"):
+		hybrid_chance += float(v.call("hive_bonus"))
 	# Cross-pollination check in Spring
 	if current_season == WindfallTypes.Season.SPRING:
 		for i in plots.size():
@@ -133,7 +141,7 @@ func _tick_orchard_daily() -> void:
 							var fam1 = FruitRegistry.get_species(p1.planted_species_id).get("family", 0)
 							var fam2 = FruitRegistry.get_species(p2.planted_species_id).get("family", 0)
 							var hybrid_id := FruitRegistry.get_hybrid_for_families(fam1, fam2)
-							if hybrid_id != &"" and randf() < 0.35:
+							if hybrid_id != &"" and randf() < hybrid_chance:
 								# Hybrid fruit born on parent!
 								p1.grafted_species_id = hybrid_id
 								break

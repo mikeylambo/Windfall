@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://c7k0x2w94a1fl"]
+[gd_scene load_steps=14 format=3 uid="uid://c7k0x2w94a1fl"]
 
 [ext_resource type="Script" path="res://scripts/Windfall/WindfallMain.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/Windfall/RootbornPlayer.gd" id="2_player"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://scripts/Windfall/ExpeditionZone.gd" id="10_exped"]
 [ext_resource type="Script" path="res://scripts/Windfall/ExpeditionGate.gd" id="11_gate"]
 [ext_resource type="Script" path="res://scripts/Windfall/World/DayLighting.gd" id="12_light"]
+[ext_resource type="Script" path="res://scripts/Windfall/World/CameraRig.gd" id="13_cam"]
 
 [node name="WindfallMain" type="Node2D"]
 script = ExtResource("1_main")
@@ -23,17 +24,17 @@ z_index = -20
 y_sort_enabled = true
 
 [node name="Bed" type="Area2D" parent="World" node_paths=PackedStringArray("day_manager")]
-position = Vector2(360, 446)
+position = Vector2(520, 416)
 script = ExtResource("8_bed")
 day_manager = NodePath("../../DayCycleManager")
 
 [node name="MarketStall" type="Area2D" parent="World" node_paths=PackedStringArray("market_manager")]
-position = Vector2(330, 760)
+position = Vector2(400, 650)
 script = ExtResource("7_stall")
 market_manager = NodePath("../../MarketManager")
 
 [node name="Gate" type="Area2D" parent="World" node_paths=PackedStringArray("day_manager")]
-position = Vector2(1440, 566)
+position = Vector2(1150, 492)
 script = ExtResource("11_gate")
 day_manager = NodePath("../../DayCycleManager")
 
@@ -41,7 +42,7 @@ day_manager = NodePath("../../DayCycleManager")
 y_sort_enabled = true
 
 [node name="Plot_0" type="Area2D" parent="World/OrchardGrid"]
-position = Vector2(760, 420)
+position = Vector2(720, 400)
 script = ExtResource("3_plot")
 plot_index = 0
 soil_type = 4
@@ -51,7 +52,7 @@ fruit_count = 3
 current_ripeness = 2
 
 [node name="Plot_1" type="Area2D" parent="World/OrchardGrid"]
-position = Vector2(940, 420)
+position = Vector2(840, 400)
 script = ExtResource("3_plot")
 plot_index = 1
 soil_type = 1
@@ -59,7 +60,7 @@ tree_stage = 4
 planted_species_id = &"cinderapple"
 
 [node name="Plot_2" type="Area2D" parent="World/OrchardGrid"]
-position = Vector2(1120, 420)
+position = Vector2(960, 400)
 script = ExtResource("3_plot")
 plot_index = 2
 soil_type = 2
@@ -67,7 +68,7 @@ tree_stage = 2
 planted_species_id = &"rimepear"
 
 [node name="Plot_3" type="Area2D" parent="World/OrchardGrid"]
-position = Vector2(760, 690)
+position = Vector2(720, 580)
 script = ExtResource("3_plot")
 plot_index = 3
 soil_type = 3
@@ -77,19 +78,19 @@ fruit_count = 4
 current_ripeness = 2
 
 [node name="Plot_4" type="Area2D" parent="World/OrchardGrid"]
-position = Vector2(940, 690)
+position = Vector2(840, 580)
 script = ExtResource("3_plot")
 plot_index = 4
 soil_type = 0
 
 [node name="Plot_5" type="Area2D" parent="World/OrchardGrid"]
-position = Vector2(1120, 690)
+position = Vector2(960, 580)
 script = ExtResource("3_plot")
 plot_index = 5
 soil_type = 5
 
 [node name="Wren" type="CharacterBody2D" parent="World"]
-position = Vector2(470, 700)
+position = Vector2(600, 640)
 script = ExtResource("9_villager")
 villager_name = "Wren"
 village_job = "Watch"
@@ -98,7 +99,7 @@ loved_flavor = "Sour"
 hated_flavor = "Sweet"
 
 [node name="Hesper" type="CharacterBody2D" parent="World"]
-position = Vector2(560, 920)
+position = Vector2(1110, 690)
 script = ExtResource("9_villager")
 villager_name = "Hesper"
 village_job = "Beekeeper"
@@ -112,12 +113,13 @@ position = Vector2(1560, 140)
 script = ExtResource("10_exped")
 
 [node name="Player" type="CharacterBody2D" parent="World"]
-position = Vector2(470, 560)
+position = Vector2(560, 500)
 script = ExtResource("2_player")
 
 [node name="Camera2D" type="Camera2D" parent="World/Player" groups=["main_camera"]]
 position = Vector2(0, -16)
 zoom = Vector2(2, 2)
+script = ExtResource("13_cam")
 limit_left = 0
 limit_top = 0
 limit_right = 2560

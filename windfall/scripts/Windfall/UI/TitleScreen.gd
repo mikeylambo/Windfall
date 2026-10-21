@@ -131,7 +131,7 @@ func _build_ui() -> void:
 	layer.add_child(root)
 
 	var vignette := TextureRect.new()
-	vignette.texture = _vignette()
+	vignette.texture = Art.tex("ui/vignette")
 	vignette.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	vignette.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -193,21 +193,6 @@ func _build_ui() -> void:
 	var t := create_tween().set_parallel(true)
 	t.tween_property(_logo, "modulate:a", 1.0, 0.8)
 	t.tween_property(_logo, "scale", Vector2.ONE, 1.0).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
-
-
-func _vignette() -> Texture2D:
-	var g := Gradient.new()
-	g.set_color(0, Color(0, 0, 0, 0))
-	g.set_color(1, Color(0.06, 0.03, 0.08, 0.72))
-	g.add_point(0.55, Color(0, 0, 0, 0.05))
-	var gt := GradientTexture2D.new()
-	gt.gradient = g
-	gt.fill = GradientTexture2D.FILL_RADIAL
-	gt.fill_from = Vector2(0.5, 0.45)
-	gt.fill_to = Vector2(1.05, 1.05)
-	gt.width = 256
-	gt.height = 256
-	return gt
 
 
 func _process(delta: float) -> void:

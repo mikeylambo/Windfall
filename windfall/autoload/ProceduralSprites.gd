@@ -83,3 +83,11 @@ func sway_material(strength: float = 1.0, phase: float = 0.0) -> ShaderMaterial:
 	m.set_shader_parameter("strength", strength)
 	m.set_shader_parameter("phase", phase)
 	return m
+
+
+## Path of a species' 16x16 icon (UI). Falls back to the family icon.
+func species_icon(species_id: StringName) -> String:
+	var p := "icons/species/%s" % species_id
+	if ResourceLoader.exists(ROOT + p + ".png"):
+		return p
+	return "icons/fruit_%d" % int(FruitRegistry.get_species(species_id).get("family", 0))

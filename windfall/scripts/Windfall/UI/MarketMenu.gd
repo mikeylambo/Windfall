@@ -25,6 +25,7 @@ func build() -> void:
 	tabs.add_child(UIKit.button("Sell", func(): _set_tab(0)))
 	tabs.add_child(UIKit.button("Seeds", func(): _set_tab(1)))
 	tabs.add_child(UIKit.button("Upgrades", func(): _set_tab(2)))
+	tabs.add_child(UIKit.button("Pantry", func(): _set_tab(3)))
 	tabs.add_child(UIKit.spacer(0, 0, true))
 	tabs.add_child(UIKit.icon("icons/coin", 30))
 	_gold = UIKit.bold("", 18, UITheme.GOLD)
@@ -93,7 +94,7 @@ func refresh() -> void:
 				for i in _player.satchel_fruits.size():
 					var f := _player.satchel_fruits[i]
 					var idx := i
-					rows.append(_row("icons/fruit_%d" % int(f.get("family", 0)), "%s  %s" % [f.get("name"), UIKit.stars(int(f.get("ripeness", 2)))], "%s · %s" % [f.get("ripeness_name"), f.get("skill_name")], "+%dg" % _price(f), func(): _sell(idx)))
+					rows.append(_row(Art.species_icon(f.get("species_id", &"")), "%s  %s" % [f.get("name"), UIKit.stars(int(f.get("ripeness", 2)))], "%s · %s" % [f.get("ripeness_name"), f.get("skill_name")], "+%dg" % _price(f), func(): _sell(idx)))
 		1:
 			for sid in _market.seed_shop.keys():
 				var sp := FruitRegistry.get_species(sid)
@@ -105,6 +106,27 @@ func refresh() -> void:
 			rows.append(_row("icons/stomach", "Stomach Expansion", "%d → %d slots" % [_player.max_stomach_slots, mini(_player.max_stomach_slots + 1, 8)], "%dg" % sc, func(): _market.buy_stomach_upgrade(_player), _market.gold >= sc and _player.max_stomach_slots < 8))
 			var tc := 100 * _market.tool_level
 			rows.append(_row("icons/tool_1", "Tool Upgrade", "Tier %d → %d · +20%% damage" % [_market.tool_level, _market.tool_level + 1], "%dg" % tc, _buy_tool, _market.gold >= tc))
+		3:
+			if _player.satchel_fruits.is_empty():
+				_list.add_child(UIKit.label("Bring fruit to preserve: juice, dried fruit or jam.", 15, UITheme.CREAM_DIM))
+			for i in _player.satchel_fruits.size():
+				var f := _player.satchel_fruits[i]
+				var idx := i
+				var ic := Art.species_icon(f.get("species_id", &""))
+				if int(f.get("form", 0)) == WindfallTypes.FruitForm.FRESH:
+					rows.append(_row(ic, "Juice %s" % f.get("name"), "Digests in half the time", "free", func(): _preserve(idx, "juice")))
+					rows.append(_row(ic, "Dry %s" % f.get("name"), "One tier lower, but Hardy", "free", func(): _preserve(idx, "dry")))
+			# jams: blend fruit of two different elements into one stomach slot
+			var made := 0
+			for a in _player.satchel_fruits.size():
+				for b in range(a + 1, _player.satchel_fruits.size()):
+					var fa := _player.satchel_fruits[a]
+					var fb := _player.satchel_fruits[b]
+					if made < 4 and int(fa.get("family")) != int(fb.get("family")) and int(fa.get("form", 0)) == 0 and int(fb.get("form", 0)) == 0:
+						var ia := a
+						var ib := b
+						rows.append(_row("icons/stomach", "Jam: %s + %s" % [fa.get("name"), fb.get("name")], "Both elements in 1 slot (pairs itself!)", "free", func(): _jam(ia, ib)))
+						made += 1
 	for r in rows:
 		_list.add_child(r)
 	for i in rows.size():
@@ -140,3 +162,26 @@ func _sell_all() -> void:
 func _buy_tool() -> void:
 	if _market.buy_tool_upgrade(_player):
 		_player.tool_level = _market.tool_level
+
+
+func _preserve(idx: int, kind: String) -> void:
+	if idx >= _player.satchel_fruits.size():
+		return
+	var f := _player.satchel_fruits[idx]
+	_player.satchel_fruits[idx] = _market.make_juice(f) if kind == "juice" else _market.make_dried_fruit(f)
+	_player.satchel_changed.emit()
+	WindfallSound.play_harvest()
+	HUDBus.toast("Made %s" % _player.satchel_fruits[idx].get("name"), UITheme.GOLD)
+	refresh()
+
+
+func _jam(a: int, b: int) -> void:
+	if b >= _player.satchel_fruits.size():
+		return
+	var jam := _market.make_jam(_player.satchel_fruits[a], _player.satchel_fruits[b])
+	_player.satchel_fruits.remove_at(b)
+	_player.satchel_fruits[a] = jam
+	_player.satchel_changed.emit()
+	WindfallSound.play_prime_timing()
+	HUDBus.toast("Made %s" % jam.get("name"), UITheme.GOLD)
+	refresh()

@@ -38,7 +38,8 @@ var _flash_timer: float = 0.0
 
 # Presentation
 var body_sprite: Sprite2D
-var _hp_bar: Node2D
+var _hp_bar: Sprite2D
+var _hp_fill: Sprite2D
 var _knock: Vector2 = Vector2.ZERO
 var _eat_timer: float = 0.0
 var _hurt_timer: float = 0.0
@@ -125,9 +126,7 @@ func _update_targeting() -> void:
 			return
 
 	# Otherwise, target player
-	var players := get_tree().get_nodes_in_group("player")
-	if not players.is_empty():
-		target_node = players[0] as Node2D
+	target_node = _nearest_player()
 
 
 func _attempt_steal_fruit(plot: OrchardPlot2D) -> void:
@@ -149,7 +148,7 @@ func _eat_stolen_fruit() -> void:
 	var c := WPal.element(eaten_family, 3)
 	FX.element_burst(eaten_family, global_position + Vector2(0, -18), 1.2)
 	FX.popup("STOLEN!", global_position + Vector2(0, -48), c, 16)
-	_aura = FX.glow(self, c, 36.0, Vector2(0, -14), 0.4, 0.75)
+	_aura = FX.glow(self, c, 30.0, Vector2(0, -14), 0.3, 0.5)
 	var mat := body_sprite.material as ShaderMaterial
 	mat.set_shader_parameter("rim_count", 1)
 	mat.set_shader_parameter("rim_a", c)
@@ -158,9 +157,7 @@ func _eat_stolen_fruit() -> void:
 	# Health boost from eating
 	current_health = minf(current_health + 30.0, max_health * 1.4)
 	# Now targets player aggressively!
-	var players := get_tree().get_nodes_in_group("player")
-	if not players.is_empty():
-		target_node = players[0] as Node2D
+	target_node = _nearest_player()
 
 
 func _tick_stolen_skill(delta: float) -> void:
@@ -199,10 +196,9 @@ func take_damage(amount: float) -> void:
 	_hurt_timer = 0.18
 	FX.damage_number(amount, global_position + Vector2(0, -26), -1, _next_crit)
 	_next_crit = false
-	var players := get_tree().get_nodes_in_group("player")
-	if not players.is_empty():
-		var away: Vector2 = (global_position - (players[0] as Node2D).global_position).normalized()
-		_knock = away * 170.0
+	var np := _nearest_player()
+	if np:
+		_knock = (global_position - np.global_position).normalized() * 170.0
 
 	if current_health <= 0.0:
 		_die()
@@ -249,9 +245,8 @@ func _tick_statuses(delta: float) -> void:
 
 func _die() -> void:
 	# Drop carried fruit and seeds for player
-	var players := get_tree().get_nodes_in_group("player")
-	if not players.is_empty():
-		var p: RootbornPlayer = players[0]
+	var p: RootbornPlayer = _nearest_player()
+	if p:
 		if not carried_fruit.is_empty():
 			p.satchel_fruits.append(carried_fruit)
 		# 60% chance to drop a random seed
@@ -289,21 +284,19 @@ func _setup_visuals() -> void:
 	add_child(Art.shadow("small" if gnawer else "small"))
 	body_sprite = Art.actor_sprite("gnawer" if gnawer else "poacher")
 	add_child(body_sprite)
-	_hp_bar = Node2D.new()
+	(body_sprite.material as ShaderMaterial).set_shader_parameter("outline_color", Color("ffcf4a") if gnawer else Color("ff8a4a"))
+	_hp_bar = Art.sprite("ui/hp_world_frame")
+	_hp_bar.centered = true
+	_hp_bar.offset = Vector2.ZERO
 	_hp_bar.position = Vector2(0, -52 if not gnawer else -38)
 	_hp_bar.z_index = 30
-	_hp_bar.draw.connect(_draw_hp)
 	add_child(_hp_bar)
+	_hp_fill = Art.sprite("ui/hp_world_fill")
+	_hp_fill.offset = Vector2.ZERO
+	_hp_fill.region_enabled = true
+	_hp_fill.position = Vector2(-12, -2)
+	_hp_bar.add_child(_hp_fill)
 	_hp_bar.visible = false
-
-
-func _draw_hp() -> void:
-	var w := 22.0
-	var pct := clampf(current_health / max_health, 0.0, 1.0)
-	_hp_bar.draw_rect(Rect2(-w * 0.5 - 1, -1, w + 2, 5), WPal.OUTLINE)
-	_hp_bar.draw_rect(Rect2(-w * 0.5, 0, w, 3), Color("2a1e24"))
-	_hp_bar.draw_rect(Rect2(-w * 0.5, 0, w * pct, 3), WPal.RED[3])
-	_hp_bar.draw_rect(Rect2(-w * 0.5, 0, w * pct, 1), WPal.RED[4])
 
 
 func _update_visuals(delta: float) -> void:
@@ -324,6 +317,8 @@ func _update_visuals(delta: float) -> void:
 	body_sprite.flip_h = dir == 2 and face.x < 0.0
 	var mat := body_sprite.material as ShaderMaterial
 	mat.set_shader_parameter("flash", clampf(_flash_timer / 0.12, 0.0, 1.0))
+	# warm rim keeps raiders readable against dark night grass
+	mat.set_shader_parameter("outline_alpha", 0.25 + 0.7 * FX.night)
 	# status tints
 	var tint := Color.WHITE
 	if chill_timer > 0.0: tint = Color(0.7, 0.92, 1.0)
@@ -341,4 +336,16 @@ func _update_visuals(delta: float) -> void:
 			FX.burst(global_position + Vector2(0, -18), "fx/spark", WPal.element(0, 4), 2, 60.0, 0.2, Vector2.ZERO, 180.0, Vector2.UP, Vector2(1, 1), "overlay", Color(0, 0, 0, 0), true)
 	_hp_bar.visible = current_health < max_health
 	if _hp_bar.visible:
-		_hp_bar.queue_redraw()
+		var tex_w := float(_hp_fill.texture.get_width())
+		_hp_fill.region_rect = Rect2(0, 0, ceilf(tex_w * clampf(current_health / max_health, 0.0, 1.0) / 2.0) * 2.0, _hp_fill.texture.get_height())
+
+
+func _nearest_player() -> RootbornPlayer:
+	var best: RootbornPlayer = null
+	var bd := INF
+	for p in get_tree().get_nodes_in_group("player"):
+		var d := global_position.distance_to((p as Node2D).global_position)
+		if d < bd:
+			bd = d
+			best = p
+	return best

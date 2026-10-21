@@ -61,6 +61,8 @@ func _process(delta: float) -> void:
 		_modulate.color = col
 	var n := clampf((clock - 0.66) / 0.16, 0.0, 1.0)
 	FX.night = n
+	if dresser:
+		dresser.set_night(n)
 	if dresser and dresser.window_glow:
 		dresser.window_glow.modulate.a = clampf((clock - 0.6) / 0.15, 0.0, 1.0) * 0.9
 

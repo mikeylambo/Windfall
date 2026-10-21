@@ -214,3 +214,29 @@ static func quickroot(fam: int) -> PixelCanvas:
 			c.ellipse(12, 8, 1.6, 1.6, r[4])
 	c.outline(WPal.OUTLINE, 0.6)
 	return c
+
+
+## Butterfly, 2 frames (wings open / closed), 7x5 each. Tinted at runtime.
+static func butterfly_frames() -> PixelCanvas:
+	var frames: Array = []
+	for f in 2:
+		var c := PixelCanvas.new(7, 5)
+		if f == 0:
+			c.rect(0, 0, 3, 2, Color.WHITE); c.rect(4, 0, 3, 2, Color.WHITE)
+			c.rect(1, 2, 2, 2, Color(0.85, 0.85, 0.85)); c.rect(4, 2, 2, 2, Color(0.85, 0.85, 0.85))
+		else:
+			c.rect(2, 0, 1, 3, Color.WHITE); c.rect(4, 0, 1, 3, Color.WHITE)
+		c.vline(3, 1, 4, WPal.INK)
+		frames.append(c)
+	return PixelCanvas.pack(frames, 2)
+
+
+## Ground ring under the player at night, 24 x 10.
+static func ground_ring() -> PixelCanvas:
+	var c := PixelCanvas.new(26, 12)
+	for y in 12:
+		for x in 26:
+			var d := Vector2((x + 0.5 - 13.0) / 12.0, (y + 0.5 - 6.0) / 5.0).length()
+			if d <= 1.0 and d >= 0.74:
+				c.px(x, y, Color(1, 1, 1, 0.9 if d > 0.86 else 0.45))
+	return c

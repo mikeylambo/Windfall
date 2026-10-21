@@ -113,6 +113,8 @@ func make_dried_fruit(fruit: Dictionary) -> Dictionary:
 	# One tier lower
 	var rip: int = int(fruit.get("ripeness", WindfallTypes.Ripeness.RIPE))
 	dried["ripeness"] = maxi(rip - 1, 0)
+	dried["ripeness_name"] = WindfallTypes.RIPENESS_NAMES.get(dried["ripeness"], "Ripe")
+	dried["traits"].append("Hardy")
 	return dried
 
 
@@ -121,5 +123,7 @@ func make_jam(fruit_a: Dictionary, fruit_b: Dictionary) -> Dictionary:
 	jam["form"] = WindfallTypes.FruitForm.JAM
 	jam["name"] = "%s & %s Jam" % [fruit_a.get("name", "A"), fruit_b.get("name", "B")]
 	jam["slots"] = 1 # Pre-mixed Pairing in 1 slot!
+	jam["jam_family"] = int(fruit_b.get("family", 0))
+	jam["jam_with"] = fruit_b.get("species_id", &"")
 	jam["traits"].append("Juicy")
 	return jam

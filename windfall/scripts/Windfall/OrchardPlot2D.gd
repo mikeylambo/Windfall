@@ -47,6 +47,7 @@ var _shown_stage: int = -1
 var _shown_fruit: int = -1
 var _shown_ripe: int = -1
 var _shown_wet: int = -1
+var _shown_graft: StringName = &""
 var _sparkle_timer: float = 0.0
 
 # Timing tap mini-game for Prime harvest
@@ -215,7 +216,17 @@ func _harvest_fruit(player: RootbornPlayer, ripeness: int) -> void:
 	if is_pruned and randf() < 0.4:
 		traits.append(FruitRegistry.roll_random_trait())
 
-	var fruit_inst := FruitRegistry.create_fruit_instance(planted_species_id, ripeness, traits)
+	var sid := planted_species_id
+	if grafted_species_id != &"":
+		# cross-pollinated in spring: this pick is the hybrid
+		sid = grafted_species_id
+		grafted_species_id = &""
+		_shown_fruit = -1
+		var hfam := int(FruitRegistry.get_species(sid).get("family", 0))
+		FX.popup("HYBRID!", global_position + Vector2(0, -110), WPal.element(hfam, 4), 22, 34.0, 1.2)
+		FX.element_burst(hfam, global_position + Vector2(0, -80), 1.4)
+		WindfallSound.play_prime_timing()
+	var fruit_inst := FruitRegistry.create_fruit_instance(sid, ripeness, traits)
 	player.satchel_fruits.append(fruit_inst)
 	player.satchel_changed.emit()
 
@@ -301,7 +312,8 @@ func _update_visuals(delta: float) -> void:
 			t.tween_property(_crown, "scale", Vector2.ONE, 0.4).set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 	var shown_fruit := fruit_count if tree_stage >= WindfallTypes.TreeStage.MATURE else 0
-	if shown_fruit != _shown_fruit or current_ripeness != _shown_ripe:
+	if shown_fruit != _shown_fruit or current_ripeness != _shown_ripe or grafted_species_id != _shown_graft:
+		_shown_graft = grafted_species_id
 		_shown_fruit = shown_fruit
 		_shown_ripe = current_ripeness
 		_rebuild_fruit(fam)
@@ -385,6 +397,11 @@ func _rebuild_fruit(fam: int) -> void:
 		else:
 			_crown.add_child(f)
 			f.position = spots[i]
+		if i == 0 and grafted_species_id != &"":
+			var hf := int(FruitRegistry.get_species(grafted_species_id).get("family", 0))
+			f.texture = Art.tex("trees/fruit_%d" % hf)
+			f.scale = Vector2(1.25, 1.25)
+			FX.glow(f, WPal.element(hf, 3), 18.0, Vector2.ZERO, 0.6, 0.6)
 		_fruits.append(f)
 
 

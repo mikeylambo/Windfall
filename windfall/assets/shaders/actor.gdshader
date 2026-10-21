@@ -8,6 +8,8 @@ uniform vec4 rim_a : source_color = vec4(1.0);
 uniform vec4 rim_b : source_color = vec4(1.0);
 uniform vec4 rim_c : source_color = vec4(1.0);
 uniform float rim_strength : hint_range(0.0, 1.0) = 0.0;
+uniform vec4 outline_color : source_color = vec4(1.0, 0.6, 0.35, 1.0);
+uniform float outline_alpha : hint_range(0.0, 1.0) = 0.0;   // night readability rim
 uniform float ghost = 0.0;            // >0 renders as a flat afterimage
 uniform vec4 ghost_color : source_color = vec4(1.0);
 
@@ -24,7 +26,16 @@ void fragment() {
 	if (ghost > 0.0) {
 		COLOR = vec4(ghost_color.rgb, c.a * ghost);
 	} else {
-		if (rim_strength > 0.0 && rim_count > 0 && c.a < 0.5) {
+		bool rim_on = rim_strength > 0.0 && rim_count > 0;
+		if (!rim_on && outline_alpha > 0.0 && c.a < 0.5) {
+			vec2 px = TEXTURE_PIXEL_SIZE * 2.0;
+			float n = texture(TEXTURE, UV + vec2(px.x, 0.0)).a + texture(TEXTURE, UV - vec2(px.x, 0.0)).a
+				+ texture(TEXTURE, UV + vec2(0.0, px.y)).a + texture(TEXTURE, UV - vec2(0.0, px.y)).a;
+			if (n > 0.5) {
+				c = vec4(outline_color.rgb, outline_alpha);
+			}
+		}
+		if (rim_on && c.a < 0.5) {
 			vec2 px = TEXTURE_PIXEL_SIZE * 2.0;
 			float n = texture(TEXTURE, UV + vec2(px.x, 0.0)).a + texture(TEXTURE, UV - vec2(px.x, 0.0)).a
 				+ texture(TEXTURE, UV + vec2(0.0, px.y)).a + texture(TEXTURE, UV - vec2(0.0, px.y)).a;

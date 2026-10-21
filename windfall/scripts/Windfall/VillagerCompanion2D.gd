@@ -28,6 +28,7 @@ var _talks: int = 0
 
 func _ready() -> void:
 	add_to_group("allies")
+	add_to_group("villagers")
 	if not has_node("CollisionShape2D"):
 		var col := CollisionShape2D.new()
 		var shape := CircleShape2D.new()
@@ -56,8 +57,8 @@ func _ready() -> void:
 	add_child(_bubble)
 	var dots := Label.new()
 	dots.text = "!"
-	dots.add_theme_font_override("font", load("res://assets/fonts/PixelifySans-Bold.woff2"))
-	dots.add_theme_font_size_override("font_size", 16)
+	dots.add_theme_font_override("font", load(UITheme.FONT_PATH))
+	dots.add_theme_font_size_override("font_size", 10)
 	dots.add_theme_color_override("font_color", WPal.OUTLINE)
 	dots.size = Vector2(36, 24)
 	dots.position = Vector2(-18, -28)
@@ -72,16 +73,92 @@ func _physics_process(delta: float) -> void:
 
 	if is_in_party:
 		_process_party_follow_and_combat(delta)
+		if is_support():
+			_tick_support(delta)
+	elif is_guard() and _raid_active():
+		_process_guard(delta)
 	else:
 		_wander(delta)
 	_update_visuals()
 
 
-func _process_party_follow_and_combat(delta: float) -> void:
-	var players := get_tree().get_nodes_in_group("player")
-	if players.is_empty():
+# ── village party roles ─────────────────────────────────────────────────────
+## In the party: Rogues (Wren) fight beside you, Supports (Hesper) mend you.
+## Left at home: Wren keeps watch and defends the orchard; Hesper tends the
+## hives, raising spring cross-pollination odds (DayCycleManager reads it).
+
+var _support_timer: float = 4.0
+
+
+func is_support() -> bool:
+	return combat_role == "Support"
+
+
+func is_guard() -> bool:
+	return village_job == "Watch"
+
+
+## Hybrid odds bonus while this villager tends the hives at home.
+func hive_bonus() -> float:
+	return 0.2 if village_job == "Beekeeper" and not is_in_party else 0.0
+
+
+func _raid_active() -> bool:
+	var dm := get_tree().get_first_node_in_group("day_manager")
+	return dm != null and bool(dm.get("is_raid_active"))
+
+
+func _nearest_player() -> RootbornPlayer:
+	var best: RootbornPlayer = null
+	var bd := INF
+	for p in get_tree().get_nodes_in_group("player"):
+		var d := global_position.distance_to((p as Node2D).global_position)
+		if d < bd:
+			bd = d
+			best = p
+	return best
+
+
+func _tick_support(delta: float) -> void:
+	_support_timer -= delta
+	if _support_timer > 0.0:
 		return
-	var player: RootbornPlayer = players[0]
+	_support_timer = 4.0
+	var p := _nearest_player()
+	if p and p.current_health < p.max_health and global_position.distance_to(p.global_position) < 160.0:
+		p.heal(8.0)
+		FX.burst(p.global_position + Vector2(0, -20), "fx/sparkle", WPal.GOLD[4], 6, 40.0, 0.6, Vector2(0, -30), 180.0, Vector2.UP, Vector2(1, 1.5))
+		FX.popup("+8", p.global_position + Vector2(0, -44), WPal.LEAF[5], 12)
+
+
+func _process_guard(delta: float) -> void:
+	# patrol the orchard and intercept raiders near the trees
+	var orchard := WorldLayout.ORCHARD
+	target_enemy = null
+	var best := 220.0
+	for e in get_tree().get_nodes_in_group("enemies"):
+		var ep: Vector2 = (e as Node2D).global_position
+		if orchard.grow(120).has_point(ep):
+			var d := global_position.distance_to(ep)
+			if d < best:
+				best = d
+				target_enemy = e
+	if target_enemy:
+		velocity = (target_enemy.global_position - global_position).normalized() * 130.0
+		if best <= 32.0 and _attack_cd <= 0.0:
+			_attack_cd = 1.1
+			target_enemy.call("take_damage", 18.0)
+			WindfallSound.play_swing()
+	else:
+		var post := orchard.get_center() + Vector2(0, 80)
+		velocity = (post - global_position).normalized() * 90.0 if global_position.distance_to(post) > 30.0 else Vector2.ZERO
+	move_and_slide()
+
+
+func _process_party_follow_and_combat(delta: float) -> void:
+	var player := _nearest_player()
+	if player == null:
+		return
 
 	# Check for nearby enemies to attack
 	var enemies := get_tree().get_nodes_in_group("enemies")
@@ -133,9 +210,9 @@ func _update_visuals() -> void:
 	var dir := 0
 	var face := velocity
 	if is_focused:
-		var players := get_tree().get_nodes_in_group("player")
-		if not players.is_empty():
-			face = (players[0] as Node2D).global_position - global_position
+		var np := _nearest_player()
+		if np:
+			face = np.global_position - global_position
 	if absf(face.x) > absf(face.y) * 1.1: dir = 2
 	elif face.y < -1.0: dir = 1
 	var moving := velocity.length() > 10.0
@@ -153,7 +230,7 @@ func _update_visuals() -> void:
 
 
 func get_prompt() -> String:
-	return "Talk to %s" % villager_name
+	return "Talk to %s  (%s)" % [villager_name, "in party" if is_in_party else ("on watch" if is_guard() else "tending hives")]
 
 
 func set_focused(val: bool) -> void:
@@ -177,7 +254,10 @@ func interact(_player: RootbornPlayer) -> void:
 	var lines: Array = pool[_talks % pool.size()].duplicate()
 	_talks += 1
 	var joining := not is_in_party
-	lines.append("%s joined your party!" % villager_name if joining else "%s heads back to home duty." % villager_name)
+	if joining:
+		lines.append("%s joined your party! %s" % [villager_name, "Blades ready." if not is_support() else "I'll keep you patched up."])
+	else:
+		lines.append("%s heads back to %s." % [villager_name, "watch the treeline" if is_guard() else "tend the hives"])
 	HUDBus.say(villager_name, lines, func():
 		is_in_party = joining
 		WindfallSound.play_harvest()

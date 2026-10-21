@@ -11,6 +11,9 @@ class_name ElementalProjectile
 
 ## Fired by an enemy that ate stolen fruit: hits the player instead of enemies.
 var hostile: bool = false
+## Set by stomach pairings on launch (see RootbornPlayer._launch).
+var conductive: bool = false
+var fanned: bool = false
 
 var direction: Vector2 = Vector2.RIGHT
 var targets_hit: Array[Node2D] = []
@@ -31,7 +34,6 @@ func setup(p_dir: Vector2, p_damage: float, p_family: int, p_speed: float = 420.
 
 
 func _ready() -> void:
-	monitoring = true
 	z_index = 8
 	var col := CollisionShape2D.new()
 	var shape := CircleShape2D.new()
@@ -54,7 +56,7 @@ func _build_visuals() -> void:
 	# element trail
 	_trail = CPUParticles2D.new()
 	_trail.local_coords = false
-	_trail.amount = 16
+	_trail.amount = 10
 	_trail.lifetime = 0.35
 	_trail.position = _sprite.position
 	_trail.gravity = Vector2.ZERO
@@ -72,14 +74,14 @@ func _build_visuals() -> void:
 	_trail.texture = Art.tex(tex)
 	_trail.gravity = grav
 	var g := Gradient.new()
-	g.set_color(0, WPal.element(family, 4))
+	g.set_color(0, Color(WPal.element(family, 3), 0.6))
 	g.set_color(1, Color(WPal.element(family, 2), 0.0))
 	_trail.color_ramp = g
 	var m := CanvasItemMaterial.new()
 	m.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
 	_trail.material = m
 	add_child(_trail)
-	FX.glow(self, WPal.element(family, 3), 26.0, Vector2(0, -12), 0.3, 0.5)
+	FX.glow(self, WPal.element(family, 3), 20.0, Vector2(0, -12), 0.25, 0.4)
 
 
 func _physics_process(delta: float) -> void:
@@ -133,12 +135,12 @@ func _on_area_entered(area: Area2D) -> void:
 func _hit_target(target: Node2D) -> void:
 	var final_damage := damage
 	# Elemental interaction: Storm conducts through wet targets
-	var conductive := family == WindfallTypes.Family.STORM and bool(target.get("is_wet"))
-	if conductive:
+	var is_conductive := family == WindfallTypes.Family.STORM and (conductive or bool(target.get("is_wet")))
+	if is_conductive:
 		final_damage *= 1.5
 		FX.popup("CONDUCTIVE!", target.global_position + Vector2(0, -56), WPal.element(family, 4), 13)
 	if target.has_method("set_next_hit_crit"):
-		target.call("set_next_hit_crit", conductive)
+		target.call("set_next_hit_crit", is_conductive)
 	target.call("take_damage", final_damage)
 	EventBus.emit_damage_dealt(self, target, final_damage)
 
@@ -153,7 +155,7 @@ func _hit_target(target: Node2D) -> void:
 			WindfallTypes.Family.TIDE:
 				target.call("apply_status", "wet", 5.0)
 
-	FX.element_burst(family, target.global_position + Vector2(0, -14), 0.8)
+	FX.element_burst(family, target.global_position + Vector2(0, -14), 0.6)
 	FX.shake(0.12)
 	WindfallSound.play_hit()
 
@@ -177,13 +179,16 @@ func _chain_to_next(last_target: Node2D) -> void:
 		chain_proj.position = closest.global_position - (closest.global_position - last_target.global_position).normalized() * 10.0
 		chain_proj.setup((closest.global_position - last_target.global_position).normalized(), damage * 0.85, family, speed, 0.0, false, chain_count - 1)
 		chain_proj.targets_hit = targets_hit.duplicate()
-		get_parent().add_child(chain_proj)
+		# spawned from a collision callback: add after the physics flush
+		get_parent().add_child.call_deferred(chain_proj)
 		WindfallSound.play_spell(WindfallTypes.Family.STORM)
 
 
 func _explode_splash() -> void:
 	FX.ring(global_position, WPal.element(family, 3), splash_radius, 0.35)
-	FX.element_burst(family, global_position, 1.5)
+	if fanned:
+		FX.popup("FANNED!", global_position + Vector2(0, -30), WPal.element(WindfallTypes.Family.GALE, 4), 12)
+	FX.element_burst(family, global_position, 1.1)
 	FX.shake(0.28)
 	var enemies := get_tree().get_nodes_in_group("enemies")
 	for enemy in enemies:
@@ -191,6 +196,8 @@ func _explode_splash() -> void:
 			if global_position.distance_to(enemy.global_position) <= splash_radius:
 				if enemy.has_method("take_damage"):
 					enemy.call("take_damage", damage * 0.6)
+				if fanned and enemy.has_method("apply_status"):
+					enemy.call("apply_status", "burn", 4.0)
 
 
 func _finish() -> void:

@@ -62,7 +62,7 @@ func refresh() -> void:
 		var b: Button
 		if i < _player.satchel_fruits.size():
 			var f := _player.satchel_fruits[i]
-			b = UIKit.slot_button("icons/fruit_%d" % int(f.get("family", 0)), "")
+			b = UIKit.slot_button(Art.species_icon(f.get("species_id", &"")), "")
 			var stars := UIKit.bold(UIKit.stars(int(f.get("ripeness", 2))), 11, UITheme.GOLD)
 			stars.position = Vector2(6, 40)
 			b.add_child(stars)

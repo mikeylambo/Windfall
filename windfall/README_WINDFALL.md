@@ -21,6 +21,13 @@ Open this folder in **Godot 4.6** and press **F5** (or `godot --path .` from thi
 | Satchel · Codex | I · C | Back · R3 |
 | Pause | Esc | Start |
 
+**Co-op (local, up to 3):** P1 plays on keyboard/mouse plus the first gamepad. Press **Start on any other gamepad** to drop in as P2 or P3. The satchel, seeds and gold are shared; stomachs, tools and cooldowns are per player. The camera frames everyone.
+
+**Village party:** talk to **Wren** or **Hesper** to bring them along or send them home.
+
+- **Wren in the party:** fights with twin blades. **On watch at home:** calls out raids and defends the orchard.
+- **Hesper in the party:** heals the nearest Rootborn. **Tending the hives at home:** +20% spring hybrid odds.
+
 All menus are fully keyboard and gamepad navigable (arrows/WASD/D-pad + E/Enter/A, Esc/B to close).
 
 ## The day loop
@@ -47,6 +54,9 @@ tools/                             bake + automated playtest scripts (excluded f
 ```
 
 ## Art pipeline
+
+Every sprite is loaded by a stable name through the `Art` autoload. Swap any PNG for one with the same layout and nothing else needs to change. The layout of every sheet is documented in `assets/art/ART_SPEC.md`.
+
 
 All art is hand-authored pixel art written as code: palette in `WPal.gd`, painters in `scripts/Windfall/Art/`. It is baked to PNG sheets at 1 texel = 2 world px (UI at 3 px).
 

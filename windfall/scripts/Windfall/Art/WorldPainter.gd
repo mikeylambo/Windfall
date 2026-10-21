@@ -112,7 +112,7 @@ static func _flower_ok(p: Vector2) -> bool:
 	for pl in WorldLayout.PLOTS:
 		if p.distance_to(pl) < 70.0:
 			return false
-	return p.distance_to(WorldLayout.HOUSE) > 120.0
+	return p.distance_to(WorldLayout.HOUSE) > 120.0 and not WorldLayout.ORCHARD.has_point(p)
 
 
 ## A raised soil bed (40 x 30 texels) for an affinity, dry or watered.

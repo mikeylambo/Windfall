@@ -49,7 +49,7 @@ func rebuild(player: RootbornPlayer) -> void:
 	_slots.clear()
 	for i in player.max_stomach_slots:
 		var slot := Control.new()
-		slot.custom_minimum_size = Vector2(56, 74)
+		slot.custom_minimum_size = Vector2(56, 84)
 		slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var glow := TextureRect.new()
 		glow.texture = Art.glow_texture()
@@ -77,10 +77,8 @@ func rebuild(player: RootbornPlayer) -> void:
 		ic.position = Vector2(12, 12)
 		ic.pivot_offset = Vector2(16, 16)
 		slot.add_child(ic)
-		var key := UIKit.bold(KEYS[i] if i < KEYS.size() else "·", 13, UITheme.CREAM_DIM)
-		key.position = Vector2(0, 56)
-		key.size = Vector2(56, 16)
-		key.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		var key := UIKit.keycap(KEYS[i] if i < KEYS.size() else "+", 20)
+		key.position = Vector2(14, 54)
 		slot.add_child(key)
 		_row.add_child(slot)
 		var filled := i < player.digesting_fruits.size()
@@ -88,16 +86,16 @@ func rebuild(player: RootbornPlayer) -> void:
 			var f := player.digesting_fruits[i]
 			var fam := int(f.get("family", 0))
 			var col := WPal.element(fam, 3)
-			ic.texture = Art.tex("icons/fruit_%d" % fam)
+			ic.texture = Art.tex(Art.species_icon(f.get("species_id", &"")))
 			ring.tint_progress = col
 			glow.modulate = Color(col, 0.55)
-			key.add_theme_color_override("font_color", col.lightened(0.3))
+			key.self_modulate = col.lightened(0.45)
 			slot.tooltip_text = "%s → %s" % [f.get("name", ""), f.get("skill_name", "")]
 		else:
 			ic.visible = false
 			glow.visible = false
 			ring.visible = false
-			key.modulate.a = 0.4
+			key.modulate.a = 0.45
 		_slots.append({"ring": ring, "icon": ic, "glow": glow, "filled": filled})
 
 	for c in _chips.get_children():

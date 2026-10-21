@@ -63,6 +63,10 @@ const DIR_DOWN := 0
 const DIR_UP := 1
 const DIR_SIDE := 2
 var input_locked: bool = false
+## Where this player's intents come from (keyboard/pad now, network later).
+var input: PlayerInput = PlayerInput.new(-1, true)
+var player_index: int = 0
+var sheet: String = "rootborn"
 var tool_level: int = 1
 var body_sprite: Sprite2D
 var tool_sprite: Sprite2D
@@ -77,6 +81,7 @@ var _dust_timer: float = 0.0
 var _ghost_timer: float = 0.0
 var _aura_glow: Sprite2D
 var _respawn_point: Vector2 = Vector2.ZERO
+var _night_ring: Sprite2D
 
 @onready var interaction_detector: Area2D = $InteractionDetector if has_node("InteractionDetector") else null
 @onready var weapon_hitbox: Area2D = $WeaponHitbox if has_node("WeaponHitbox") else null
@@ -89,7 +94,8 @@ func _ready() -> void:
 	current_energy = max_energy
 
 	_setup_collision()
-	_setup_default_satchel()
+	if player_index == 0:
+		_setup_default_satchel()
 	_setup_visuals()
 	_respawn_point = global_position
 
@@ -153,6 +159,7 @@ func _setup_default_satchel() -> void:
 
 func _physics_process(delta: float) -> void:
 	_anim_time += delta
+	input.poll()
 
 	# Hitstop freeze frame
 	if _hitstop_timer > 0.0:
@@ -168,6 +175,7 @@ func _physics_process(delta: float) -> void:
 			is_eating = false
 
 	_tick_digestion(delta)
+	_tick_pairings(delta)
 	_tick_cooldowns(delta)
 	_tick_stamina(delta)
 
@@ -190,7 +198,7 @@ func _physics_process(delta: float) -> void:
 
 	var input_vec := Vector2.ZERO
 	if not input_locked:
-		input_vec = Input.get_vector("move_left", "move_right", "move_up", "move_down")
+		input_vec = input.move
 	if input_vec != Vector2.ZERO:
 		facing_direction = input_vec.normalized()
 		velocity = velocity.move_toward(input_vec * move_speed, ACCEL * delta)
@@ -206,42 +214,42 @@ func _physics_process(delta: float) -> void:
 
 func _handle_input() -> void:
 	# Interaction
-	if Input.is_action_just_pressed("interact"):
+	if input.just("interact"):
 		if _current_interactable != null and is_instance_valid(_current_interactable):
 			_current_interactable.interact(self)
 
 	# Dash / Dodge
-	if Input.is_action_just_pressed("dash") and _roll_cd_timer <= 0.0 and current_energy >= 15.0:
+	if input.just("dash") and _roll_cd_timer <= 0.0 and current_energy >= 15.0:
 		_start_roll()
 
 	# Tool Attack
-	if Input.is_action_just_pressed("attack") and _attack_cd_timer <= 0.0:
+	if input.just("attack") and _attack_cd_timer <= 0.0:
 		_start_tool_attack()
 
 	# Tool cycle (Tab)
-	if Input.is_action_just_pressed("cycle_tool"):
+	if input.just("cycle_tool"):
 		current_tool = (current_tool + 1) % 5
 		tool_changed.emit(current_tool)
 		WindfallSound.play_swing()
 
 	# Fruit Skills: Q (Skill 1), R (Skill 2), T (Skill 3)
-	if Input.is_action_just_pressed("skill_1"):
+	if input.just("skill_1"):
 		_cast_fruit_skill(0, 1)
-	if Input.is_action_just_pressed("skill_2"):
+	if input.just("skill_2"):
 		_cast_fruit_skill(1, 2)
-	if Input.is_action_just_pressed("skill_3"):
+	if input.just("skill_3"):
 		_cast_fruit_skill(2, 3)
 
 	# Quickroot seed in combat (F)
-	if Input.is_action_just_pressed("quickroot"):
+	if input.just("quickroot"):
 		quickroot_seed()
 
 	# Fast eat from satchel (Key 1, 2, 3)
-	if Input.is_action_just_pressed("eat_1"):
+	if input.just("eat_1"):
 		eat_satchel_fruit_at(0)
-	elif Input.is_action_just_pressed("eat_2"):
+	elif input.just("eat_2"):
 		eat_satchel_fruit_at(1)
-	elif Input.is_action_just_pressed("eat_3"):
+	elif input.just("eat_3"):
 		eat_satchel_fruit_at(2)
 
 
@@ -269,7 +277,16 @@ func eat_fruit(fruit_data: Dictionary) -> bool:
 	var m_gain: float = 12.0 * WindfallTypes.RIPENESS_MULTIPLIERS.get(fruit_data.get("ripeness", 2), 1.0)
 	if "Twin" in fruit_data.get("traits", []):
 		m_gain *= 2.0
-	mastery_xp[sid] = minf(mastery_xp.get(sid, 0.0) + m_gain, 100.0)
+	var before: float = mastery_xp.get(sid, 0.0)
+	mastery_xp[sid] = minf(before + m_gain, 100.0)
+	# Mastery 100: the skill takes root. Rooted species digest 25% slower.
+	if before < 100.0 and mastery_xp[sid] >= 100.0 and not rooted_skills.has(sid) and rooted_skills.size() < 4:
+		rooted_skills.append(sid)
+		FX.popup("%s ROOTED!" % String(fruit_data.get("name", "")).to_upper(), global_position + Vector2(0, -64), WPal.GOLD[4], 20, 36.0, 1.4)
+		HUDBus.toast("%s is Rooted: it now digests 25%% slower." % fruit_data.get("name", ""), WPal.GOLD[4])
+	if rooted_skills.has(sid):
+		digesting_copy["remaining_duration"] = float(digesting_copy["remaining_duration"]) * 1.25
+		digesting_copy["digestion_duration"] = float(digesting_copy.get("digestion_duration", 50.0)) * 1.25
 
 	_update_pairings()
 	_bite_feedback(fam)
@@ -323,6 +340,8 @@ func _update_pairings() -> void:
 	var families: Array = []
 	for f in digesting_fruits:
 		families.append(int(f.get("family", 0)))
+		if f.has("jam_family"):
+			families.append(int(f["jam_family"]))
 	active_pairings = FruitRegistry.evaluate_pairings(families)
 
 	# Update aura color to match primary digesting fruit
@@ -331,6 +350,12 @@ func _update_pairings() -> void:
 		_aura_color = WindfallTypes.FAMILY_COLORS.get(primary_fam, Color.WHITE)
 	else:
 		_aura_color = Color.TRANSPARENT
+
+
+func _tick_pairings(delta: float) -> void:
+	# Lumen + Verdant: Sanctuary Bloom, a steady restorative mist
+	if WindfallTypes.PairingEffect.SANCTUARY in active_pairings and current_health < max_health:
+		heal(5.0 * delta)
 
 
 func _tick_fruit_passive(fruit: Dictionary, delta: float) -> void:
@@ -390,7 +415,7 @@ func _execute_skill(sid: StringName, fam: int, stype: int, dmg: float) -> void:
 			var proj := ElementalProjectile.new()
 			proj.position = global_position + facing_direction * 18.0
 			proj.setup(facing_direction, dmg, fam, 480.0, 0.0, false, 4)
-			get_parent().add_child(proj)
+			_launch(proj)
 		&"thunderplum":
 			# Concussive Thunderclap burst
 			_burst_shockwave(dmg, 120.0, fam)
@@ -399,7 +424,7 @@ func _execute_skill(sid: StringName, fam: int, stype: int, dmg: float) -> void:
 			var proj := ElementalProjectile.new()
 			proj.position = global_position + facing_direction * 18.0
 			proj.setup(facing_direction, dmg, fam, 440.0, 50.0, false, 0)
-			get_parent().add_child(proj)
+			_launch(proj)
 		&"scorchpeach":
 			# Sweeping flame wave
 			for angle_offset in [-0.25, 0.0, 0.25]:
@@ -407,13 +432,13 @@ func _execute_skill(sid: StringName, fam: int, stype: int, dmg: float) -> void:
 				var proj := ElementalProjectile.new()
 				proj.position = global_position + dir * 18.0
 				proj.setup(dir, dmg * 0.7, fam, 380.0, 0.0, true, 0)
-				get_parent().add_child(proj)
+				_launch(proj)
 		&"rimepear":
 			# Ice Lance piercing projectile
 			var proj := ElementalProjectile.new()
 			proj.position = global_position + facing_direction * 18.0
 			proj.setup(facing_direction, dmg, fam, 520.0, 0.0, true, 0)
-			get_parent().add_child(proj)
+			_launch(proj)
 		&"snowquince":
 			# Blizzard Field burst
 			_burst_shockwave(dmg, 140.0, fam)
@@ -428,19 +453,31 @@ func _execute_skill(sid: StringName, fam: int, stype: int, dmg: float) -> void:
 			var proj := ElementalProjectile.new()
 			proj.position = global_position + facing_direction * 18.0
 			proj.setup(facing_direction, dmg * 1.2, fam, 650.0, 0.0, true, 0)
-			get_parent().add_child(proj)
+			_launch(proj)
 		&"plasma_plum":
 			# Arc Flame hybrid: Chain lightning + fire explosion
 			var proj := ElementalProjectile.new()
 			proj.position = global_position + facing_direction * 18.0
 			proj.setup(facing_direction, dmg, fam, 500.0, 60.0, false, 5)
-			get_parent().add_child(proj)
+			_launch(proj)
 		_:
 			# Default: launch elemental projectile
 			var proj := ElementalProjectile.new()
 			proj.position = global_position + facing_direction * 18.0
 			proj.setup(facing_direction, dmg, fam, 440.0, 0.0, false, 0)
-			get_parent().add_child(proj)
+			_launch(proj)
+
+
+## Apply stomach pairings to an outgoing spell, then launch it.
+func _launch(proj: ElementalProjectile) -> void:
+	if WindfallTypes.PairingEffect.CONDUCTIVE in active_pairings and proj.family == WindfallTypes.Family.STORM:
+		proj.conductive = true          # Storm + Tide: arcs conduct as if every target were wet
+	if WindfallTypes.PairingEffect.FANNED_FLAME in active_pairings and proj.family == WindfallTypes.Family.EMBER:
+		proj.splash_radius = maxf(proj.splash_radius, 0.0) + 45.0   # Ember + Gale: wind fans the fire wider
+		proj.fanned = true
+	if WindfallTypes.PairingEffect.INDIGESTION in active_pairings:
+		proj.damage *= 0.75
+	get_parent().add_child(proj)
 
 
 func _burst_shockwave(dmg: float, radius: float, fam: int, knockback: float = 240.0) -> void:
@@ -594,6 +631,10 @@ func quickroot_seed() -> bool:
 func take_damage(amount: float) -> void:
 	if is_invulnerable:
 		return
+	# Tide + Umbra: Phantom Mist, a shroud that makes some hits pass through
+	if WindfallTypes.PairingEffect.PHANTOM_MIST in active_pairings and randf() < 0.3:
+		FX.popup("MIST", global_position + Vector2(0, -40), WPal.element(WindfallTypes.Family.UMBRA, 4), 12)
+		return
 	# Thorn armor reflection check
 	for f in digesting_fruits:
 		if f.get("species_id") == &"bramblequince":
@@ -729,7 +770,13 @@ func _setup_visuals() -> void:
 	add_to_group("saveable_player")
 	_shadow = Art.shadow("small")
 	add_child(_shadow)
-	body_sprite = Art.actor_sprite("rootborn")
+	_night_ring = Art.sprite("fx/ground_ring")
+	_night_ring.centered = true
+	_night_ring.offset = Vector2.ZERO
+	_night_ring.z_index = -1
+	_night_ring.modulate = Color(WPal.CREAM[3], 0.0)
+	add_child(_night_ring)
+	body_sprite = Art.actor_sprite(sheet)
 	add_child(body_sprite)
 	tool_sprite = Sprite2D.new()
 	tool_sprite.texture = Art.tex("icons/tool_0")
@@ -742,7 +789,7 @@ func _setup_visuals() -> void:
 
 
 func _late_visuals() -> void:
-	_aura_glow = FX.glow(self, Color.WHITE, 46.0, Vector2(0, -16), 0.35, 0.0)
+	_aura_glow = FX.glow(self, Color.WHITE, 38.0, Vector2(0, -16), 0.3, 0.0)
 	_refresh_aura()
 
 
@@ -759,7 +806,7 @@ func _refresh_aura() -> void:
 		FX.set_glow_offset(_aura_glow, Vector2(0, -16))
 		for g in FX._glows:
 			if is_instance_valid(g.sprite) and g.sprite == _aura_glow:
-				g.base_alpha = 0.55 if n > 0 else 0.0
+				g.base_alpha = 0.35 if n > 0 else 0.0
 
 
 func _process(delta: float) -> void:
@@ -812,8 +859,14 @@ func _process(delta: float) -> void:
 	var flicker := (is_rolling or _iframe_timer > 0.0) and int(Time.get_ticks_msec() / 50) % 2 == 0
 	body_sprite.modulate.a = 0.45 if flicker else 1.0
 
-	# hit flash
-	(body_sprite.material as ShaderMaterial).set_shader_parameter("flash", clampf(_damage_flash_timer / 0.14, 0.0, 1.0))
+	# hit flash + night readability (soft outline and a ground ring)
+	var bmat := body_sprite.material as ShaderMaterial
+	bmat.set_shader_parameter("flash", clampf(_damage_flash_timer / 0.14, 0.0, 1.0))
+	bmat.set_shader_parameter("outline_alpha", 0.55 * FX.night)
+	bmat.set_shader_parameter("outline_color", Color("fff2d6"))
+	_night_ring.modulate.a = 0.5 * FX.night
+	if _aura_color != Color.TRANSPARENT:
+		_night_ring.modulate = Color(_aura_color.lightened(0.3), 0.55 * maxf(FX.night, 0.35))
 
 	# run dust & digesting afterimages
 	if moving and not is_rolling:

@@ -1,5 +1,46 @@
 # Changelog
 
+## 1.1 playtest: Pass 2 (readability, framing, GDD alignment)
+
+### Readability
+- **New fonts:** Jersey 10 for body/HUD and Jersey 15 for display. The 5 no longer reads as S. Antialiasing and hinting are off, and every size snaps to the font's pixel grid through `UITheme.body_px` / `display_px` / `world_px`. Set once in the shared Theme. Minimum UI text size is now 20 px.
+- **Raid:** projectile glow down about 50%, impact flashes halved, additive particles about 60% dimmer, and smaller bolt cores.
+- **Enemy rims:** Poachers and Gnawers get a warm 1px rim that strengthens at night (ember for Poachers, amber for Gnawers).
+- **Player at night:** a soft cream outline and a ground ring tinted by your digesting element.
+- **Stomach:** Q/R/T are now keycap chips tinted by the digesting fruit's element.
+- **Banners:** a dark backing plate for contrast. Enemy HP bars are baked sprites.
+
+### Camera & world
+- Homestead re-laid out so the farmhouse and all six plots fit one frame.
+- New **CameraRig:** eases to a 1.5× homestead frame during Morning Tending, plays at 2×, leads gently in the movement direction, clamps to the map, and frames every co-op player.
+- Negative space filled: scarecrow, well, flower patches, crates, butterflies by day and fireflies by night.
+
+### Codex
+- **37 unique species icons** (about 20 fruit silhouettes × element colour, with two-tone hybrids) used across the Codex, satchel, stomach and market.
+- Undiscovered species render as a dark silhouette with a faint outline. Undiscovered hybrids show their parents with a "?".
+- The detail pane shows mastery % and Rooted status.
+
+### Gameplay built from the audit
+- **Local co-op for 3** (drop-in by gamepad), with an input-intent layer and a `NetworkInput` seam for online later.
+- **Village party roles:** Wren fights or keeps watch; Hesper heals or tends the hives (+20% hybrid odds). Party companions travel with you, and a roster chip shows on the HUD.
+- **Pairings now do something:**
+  - Conductive arcs through anything.
+  - Fanned Flame widens Ember explosions and spreads burn.
+  - Sanctuary regenerates 5 HP/s.
+  - Phantom Mist dodges 30% of hits.
+  - Indigestion now also weakens spells.
+- **Hybrids are harvestable:** a grafted tree shows a glowing hybrid fruit, and picking it yields the hybrid ("HYBRID!").
+- **Mastery → Rooted skills** (up to 4): rooted species digest 25% slower. Saved.
+- **Pantry tab** in the Market: Juice, Dry, and two-element Jams that pair by themselves. Preserved forms survive save/load.
+
+### Art pipeline
+- No art is drawn inline in gameplay scripts. Everything comes through `Art.tex(name)`.
+- `assets/art/ART_SPEC.md` documents every sheet: frame sizes, rows, animation order, anchors and the 9-slice margins.
+
+### Fixes
+- Chain-lightning bolts no longer spawn inside a physics callback (engine error).
+- Poachers, villagers and drops now use the nearest player, not player 1.
+
 ## 1.0 playtest: production polish pass
 
 ### Art & world

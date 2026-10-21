@@ -3,8 +3,8 @@ class_name UIKit
 
 ## Tiny builder helpers so every WINDFALL menu is assembled the same way.
 
-const BOLD := preload("res://assets/fonts/PixelifySans-Bold.woff2")
-const TITLE := preload("res://assets/fonts/Silkscreen-Regular.woff2")
+const BOLD := preload("res://assets/fonts/Jersey10.woff2")
+const TITLE := preload("res://assets/fonts/Jersey15.woff2")
 
 const TOOL_NAMES := ["Pruning Shears", "Scythe", "Hoe-Staff", "Seed Sling", "Watering Can"]
 const TOOL_DESC := ["Fast twin snips. Prunes trees for better fruit.", "Wide sweeping arc.", "Heavy ground slam with shockwave.", "Ranged seed pellets.", "Waters plots; soaks enemies (Wet)."]
@@ -18,7 +18,7 @@ static func label(text: String, size: int = 16, color: Color = UITheme.CREAM, va
 	l.text = text
 	if variation != "":
 		l.theme_type_variation = variation
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", UITheme.body_px(size))
 	if color != UITheme.CREAM:
 		l.add_theme_color_override("font_color", color)
 	return l
@@ -32,7 +32,7 @@ static func bold(text: String, size: int = 16, color: Color = UITheme.CREAM) -> 
 
 static func header(text: String, size: int = 24, color: Color = UITheme.GOLD) -> Label:
 	var l := label(text, size, color, "HeaderLabel")
-	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_font_size_override("font_size", UITheme.display_px(size))
 	return l
 
 

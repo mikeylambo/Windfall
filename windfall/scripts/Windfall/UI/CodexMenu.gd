@@ -66,24 +66,59 @@ func _discovered() -> Dictionary:
 	return m.get("discovered") if m else {}
 
 
+const SILHOUETTE := preload("res://assets/shaders/silhouette.gdshader")
+
+
+func _silhouette(c: CanvasItem) -> void:
+	var m := ShaderMaterial.new()
+	m.shader = SILHOUETTE
+	c.material = m
+
+
+## First base species of a family, used to picture a hybrid's parents.
+func _family_rep(fam: int) -> StringName:
+	for sid in FruitRegistry.species.keys():
+		if int(FruitRegistry.species[sid].get("family", -1)) == fam and not FruitRegistry.hybrid_recipes.values().has(sid):
+			return sid
+	return &"voltberry"
+
+
+func _hybrid_parents(sid: StringName) -> Array:
+	for key in FruitRegistry.hybrid_recipes.keys():
+		if FruitRegistry.hybrid_recipes[key] == sid:
+			var parts: PackedStringArray = String(key).split("_")
+			return [int(parts[0]), int(parts[1])]
+	return []
+
+
 func _build_grid() -> void:
 	var disc := _discovered()
 	var items: Array = []
 	var ids: Array = FruitRegistry.species.keys()
 	var found := 0
 	for sid in ids:
-		var sp: Dictionary = FruitRegistry.species[sid]
-		var fam := int(sp.get("family", 0))
 		var known := disc.has(sid)
 		if known:
 			found += 1
-		var b := UIKit.slot_button("icons/fruit_%d" % fam, "", 56)
-		var ic: TextureRect = b.get_child(0)
-		if not known:
-			ic.modulate = Color(0.08, 0.06, 0.1, 0.85)   # silhouette
-			var q := UIKit.bold("?", 18, UITheme.CREAM_DIM)
-			q.position = Vector2(22, 14)
-			b.add_child(q)
+		var parents := _hybrid_parents(sid)
+		var b: Button
+		if known or parents.is_empty():
+			b = UIKit.slot_button(Art.species_icon(sid), "", 56)
+			if not known:
+				_silhouette(b.get_child(0))
+		else:
+			# undiscovered hybrid: parent A ? parent B
+			b = UIKit.slot_button("", "", 56)
+			var h := UIKit.hbox(0)
+			h.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			h.alignment = BoxContainer.ALIGNMENT_CENTER
+			h.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			h.add_child(UIKit.icon(Art.species_icon(_family_rep(parents[0])), 18))
+			var q := UIKit.bold("?", 20, UITheme.GOLD)
+			q.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			h.add_child(q)
+			h.add_child(UIKit.icon(Art.species_icon(_family_rep(parents[1])), 18))
+			b.add_child(h)
 		var s_id: StringName = sid
 		b.focus_entered.connect(func(): _show(s_id, known))
 		b.mouse_entered.connect(func(): _show(s_id, known))
@@ -98,13 +133,21 @@ func _show(sid: StringName, known: bool) -> void:
 	var sp := FruitRegistry.get_species(sid)
 	var fam := int(sp.get("family", 0))
 	if not known:
-		_detail.text = "[b]???[/b]\n[color=#6b4430]%s family[/color]\n\nUndiscovered. Forage the wilds, buy seeds, or cross-pollinate in spring." % UIKit.FAMILY_NAMES[fam]
+		var par := _hybrid_parents(sid)
+		if not par.is_empty():
+			_detail.text = "[b]??? Hybrid[/b]\n[color=#6b4430]%s + %s[/color]\n\nPlant these two families side by side and let spring pollen do the rest." % [UIKit.FAMILY_NAMES[par[0]], UIKit.FAMILY_NAMES[par[1]]]
+		else:
+			_detail.text = "[b]???[/b]\n[color=#6b4430]%s family[/color]\n\nUndiscovered. Forage the wilds, buy seeds, or cross-pollinate in spring." % UIKit.FAMILY_NAMES[fam]
 		return
 	_detail.text = "[b][color=#%s]%s[/color][/b]\n[color=#6b4430]%s · %s · prefers %s[/color]\n\n[b]%s[/b] (%s)\n%s\n\nDamage %d · Cooldown %.1fs\nDigests %ds · %d slot(s)\n\n[color=#6b4430]Quickroot: %s[/color]" % [
 		WPal.element(fam, 1).to_html(false), sp.get("name"), UIKit.FAMILY_NAMES[fam], sp.get("flavor", ""),
 		UIKit.SOIL_NAMES[int(sp.get("soil_pref", 0))], sp.get("skill_name"), UIKit.SKILL_TYPES[int(sp.get("skill_type", 0))],
 		sp.get("skill_desc", ""), int(sp.get("base_damage", 0)), float(sp.get("cooldown", 0)),
 		int(sp.get("digestion_duration", 0)), int(sp.get("slots", 1)), sp.get("quickroot_desc", "")]
+	var pl: RootbornPlayer = hud.get("player") if hud else null
+	if pl:
+		var m := float(pl.mastery_xp.get(sid, 0.0))
+		_detail.text += "\n\n[b]Mastery %d%%[/b]%s" % [int(m), "  [color=#a86a1a]ROOTED[/color]" if pl.rooted_skills.has(sid) else ""]
 
 
 func _build_tree() -> void:
@@ -124,8 +167,10 @@ func _build_tree() -> void:
 		row.add_child(UIKit.bold(UIKit.FAMILY_NAMES[b], 16, WPal.element(b, 3)))
 		row.add_child(UIKit.bold("→", 18, UITheme.GOLD))
 		var known := disc.has(hid)
-		var hf := int(hsp.get("family", a))
-		row.add_child(UIKit.icon("icons/fruit_%d" % hf, 36, Color.WHITE if known else Color(0.08, 0.06, 0.1, 0.85)))
+		var hic := UIKit.icon(Art.species_icon(hid), 36)
+		if not known:
+			_silhouette(hic)
+		row.add_child(hic)
 		row.add_child(UIKit.bold(String(hsp.get("name", "?")) if known else "???", 16, UITheme.GOLD if known else UITheme.CREAM_DIM))
 		_tree_view.add_child(row)
 

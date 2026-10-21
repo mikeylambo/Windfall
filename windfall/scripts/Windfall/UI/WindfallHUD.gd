@@ -55,6 +55,9 @@ var _menu_root: Control
 var _menu: Control = null
 var _menu_name: String = ""
 var _displayed_gold: float = 0.0
+var _coop_box: VBoxContainer
+var _coop_chips: Dictionary = {}   # RootbornPlayer -> {bar, fruits}
+var _party_box: HBoxContainer
 
 
 func _ready() -> void:
@@ -86,6 +89,9 @@ func bind() -> void:
 	_refresh_tools()
 	_refresh_clock()
 	_refresh_quest()
+	for v in get_tree().get_nodes_in_group("villagers"):
+		v.spoken.connect(func(_v): call_deferred("_refresh_party"))
+	_refresh_party()
 
 
 # ── layout ──────────────────────────────────────────────────────────────────
@@ -122,6 +128,13 @@ func _build() -> void:
 	_st_bar = _make_bar("ui/bar_stamina", 160)
 	st_row.add_child(_st_bar)
 	vb.add_child(st_row)
+
+	# co-op vitals (P2/P3) and village party roster under P1's vitals
+	_coop_box = UIKit.vbox(4)
+	_coop_box.position = Vector2(16, 104)
+	add_child(_coop_box)
+	_party_box = UIKit.hbox(6)
+	_coop_box.add_child(_party_box)
 
 	# top-right clock / season / phase / gold
 	var tr := UIKit.hbox(8)
@@ -185,7 +198,7 @@ func _build() -> void:
 	brv.add_child(snack_row)
 	var tools := UIKit.hbox(4)
 	for i in 5:
-		var b := UIKit.slot_button("icons/tool_%d" % i, UIKit.TOOL_NAMES[i], 50)
+		var b := UIKit.slot_button("icons/tool_%d" % i, UIKit.TOOL_NAMES[i], 44)
 		b.focus_mode = Control.FOCUS_NONE
 		b.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		_tool_slots.append(b)
@@ -213,7 +226,7 @@ func _build() -> void:
 
 	# toasts (left middle)
 	_toasts = UIKit.vbox(4)
-	_toasts.position = Vector2(18, 110)
+	_toasts.position = Vector2(18, 250)
 	add_child(_toasts)
 
 	# banners (top centre)
@@ -321,12 +334,12 @@ func _refresh_satchel() -> void:
 		c.queue_free()
 	for i in 3:
 		var slot := Control.new()
-		slot.custom_minimum_size = Vector2(40, 40)
-		var bg := UIKit.icon("ui/slot_0", 40)
+		slot.custom_minimum_size = Vector2(36, 36)
+		var bg := UIKit.icon("ui/slot_0", 36)
 		slot.add_child(bg)
 		if i < player.satchel_fruits.size():
 			var f := player.satchel_fruits[i]
-			var ic := UIKit.icon("icons/fruit_%d" % int(f.get("family", 0)), 28)
+			var ic := UIKit.icon(Art.species_icon(f.get("species_id", &"")), 24)
 			ic.position = Vector2(6, 5)
 			slot.add_child(ic)
 		var k := UIKit.bold(str(i + 1), 12, UITheme.CREAM_DIM)
@@ -537,6 +550,56 @@ func close_menu() -> void:
 	is_market_open = false
 	get_tree().paused = false
 	WindfallSound.play_ui_back()
+
+
+func menu_blocked() -> bool:
+	return _dialogue.visible
+
+
+func add_coop_player(p: RootbornPlayer) -> void:
+	var chip := UIKit.panel("DarkPanel")
+	var h := UIKit.hbox(6)
+	chip.add_child(h)
+	var tag := UIKit.bold("P%d" % (p.player_index + 1), 20, CoopManager.TINTS[p.player_index])
+	h.add_child(tag)
+	var bar := PixelBar.new("ui/bar_hp", 120)
+	h.add_child(bar)
+	var fruits := UIKit.hbox(2)
+	h.add_child(fruits)
+	_coop_box.add_child(chip)
+	_coop_chips[p] = {"chip": chip, "bar": bar, "fruits": fruits}
+	p.health_updated.connect(func(c, m): bar.max_value = m; bar.value = c)
+	p.stomach_changed.connect(func(): _refresh_coop_fruits(p))
+	p.bite_taken.connect(_on_player_bite)
+	bar.max_value = p.max_health
+	bar.value = p.current_health
+
+
+func remove_coop_player(p: RootbornPlayer) -> void:
+	if _coop_chips.has(p):
+		(_coop_chips[p].chip as Node).queue_free()
+		_coop_chips.erase(p)
+
+
+func _refresh_coop_fruits(p: RootbornPlayer) -> void:
+	if not _coop_chips.has(p):
+		return
+	var box: HBoxContainer = _coop_chips[p].fruits
+	for c in box.get_children():
+		c.queue_free()
+	for f in p.digesting_fruits.slice(0, 3):
+		box.add_child(UIKit.icon(Art.species_icon(f.get("species_id", &"")), 24))
+
+
+func _refresh_party() -> void:
+	for c in _party_box.get_children():
+		c.queue_free()
+	for v in get_tree().get_nodes_in_group("villagers"):
+		var chip := UIKit.panel("DarkPanel")
+		var in_party: bool = v.get("is_in_party")
+		var role: String = ("Party" if in_party else ("Watch" if v.call("is_guard") else "Hives"))
+		chip.add_child(UIKit.bold("%s · %s" % [v.get("villager_name"), role], 20, WPal.LEAF[5] if in_party else UITheme.CREAM_DIM))
+		_party_box.add_child(chip)
 
 
 func menu_open() -> bool:

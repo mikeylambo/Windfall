@@ -12,6 +12,7 @@ const SAVE_SECTION := &"windfall"
 @onready var lighting: DayLighting = $DayLighting
 
 var initial_plots: Array[OrchardPlot2D] = []
+var coop := CoopManager.new()
 var dresser := WorldDresser.new()
 
 ## Codex discovery: species the player has seen, harvested or eaten.
@@ -26,6 +27,10 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	add_child(dresser)
+	coop.name = "Coop"
+	coop.main = self
+	add_child(coop)
+	coop.setup(player)
 	dresser.dress(world, $Ground)
 	lighting.dresser = dresser
 
@@ -52,8 +57,15 @@ func _ready() -> void:
 	hud.lighting = lighting
 	hud.main = self
 	hud.bind()
+	coop.player_joined.connect(hud.add_coop_player)
+	coop.player_left.connect(hud.remove_coop_player)
 
+	var rig := camera as CameraRig
+	rig.target = player
+	rig.day_manager = day_manager
+	rig.coop = coop
 	CameraFX.init(camera)
+	rig.snap()
 	SaveManager.register_save_provider(SAVE_SECTION, self)
 	lighting.set_phase(day_manager.current_phase, true)
 	WindfallSound.start_ambience()
@@ -118,7 +130,7 @@ func _on_raid_cleared(day_num: int) -> void:
 func _on_new_day(day_num: int) -> void:
 	# Heal player slightly each morning, and wake at the door
 	player.heal(40.0)
-	player.global_position = WorldLayout.DOOR + Vector2(0, 40)
+	_teleport(WorldLayout.DOOR + Vector2(0, 40))
 	hud.banner("DAY %d" % day_num, WindfallTypes.Season.keys()[day_manager.current_season].capitalize(), WPal.CREAM[3])
 	SaveManager.save_game()
 	hud.toast("Game saved", WPal.LEAF[5])
@@ -128,9 +140,21 @@ func _on_time_changed(phase: int, _day: int, _season: int) -> void:
 	WindfallSound.set_ambience_night(phase == WindfallTypes.TimeOfDay.NIGHT_RAID)
 	if phase == WindfallTypes.TimeOfDay.EXPEDITION:
 		hud.banner("EXPEDITION", "Forage the eastern wilds for seeds and fruit", WPal.GOLD[3])
-		player.global_position = WorldLayout.GATE + Vector2(120, 10)
+		_teleport(WorldLayout.GATE + Vector2(120, 10))
 	elif phase == WindfallTypes.TimeOfDay.NIGHT_RAID:
-		player.global_position = WorldLayout.GATE + Vector2(-110, 0)
+		_teleport(WorldLayout.GATE + Vector2(-110, 0))
+
+
+func _teleport(p: Vector2) -> void:
+	coop.gather_at(p)
+	# party companions travel with you
+	var k := 0
+	for v in get_tree().get_nodes_in_group("villagers"):
+		if v.get("is_in_party"):
+			(v as Node2D).global_position = p + Vector2(-30 + k * 60, 30)
+			k += 1
+	if camera is CameraRig:
+		(camera as CameraRig).call_deferred("snap")
 
 
 func _discover(sid: StringName) -> void:
@@ -201,7 +225,7 @@ func get_save_data() -> Dictionary:
 		"gold": market_manager.gold, "tool_level": market_manager.tool_level,
 		"hp": player.current_health, "stomach_slots": player.max_stomach_slots,
 		"fruits": fruits, "seeds": seeds, "selected_seed": String(player.selected_seed_id),
-		"mastery": mastery, "plots": plots, "discovered": discovered.keys().map(func(k): return String(k)),
+		"mastery": mastery, "rooted": player.rooted_skills.map(func(k): return String(k)), "plots": plots, "discovered": discovered.keys().map(func(k): return String(k)),
 		"tutorial_done": QuestManager.is_quest_completed(&"first_day") or tutorial == null,
 		"party": {"Wren": $World/Wren.is_in_party, "Hesper": $World/Hesper.is_in_party},
 	}
@@ -227,6 +251,9 @@ func load_save_data(d: Dictionary) -> void:
 	var mastery: Dictionary = d.get("mastery", {})
 	for k in mastery:
 		player.mastery_xp[StringName(k)] = float(mastery[k])
+	player.rooted_skills.clear()
+	for k in d.get("rooted", []):
+		player.rooted_skills.append(StringName(k))
 	var plots: Array = d.get("plots", [])
 	for i in mini(plots.size(), initial_plots.size()):
 		var p := initial_plots[i]
@@ -248,15 +275,31 @@ func load_save_data(d: Dictionary) -> void:
 	var party: Dictionary = d.get("party", {})
 	$World/Wren.is_in_party = bool(party.get("Wren", false))
 	$World/Hesper.is_in_party = bool(party.get("Hesper", false))
-	player.global_position = WorldLayout.DOOR + Vector2(0, 40)
+	_teleport(WorldLayout.DOOR + Vector2(0, 40))
 	player.satchel_changed.emit()
 	player.stomach_changed.emit()
 	hud.banner("DAY %d" % day_manager.day_number, "Welcome back to the orchard", WPal.CREAM[3])
 
 
 static func _pack_fruit(f: Dictionary) -> Dictionary:
-	return {"id": String(f.get("species_id", "voltberry")), "rip": int(f.get("ripeness", 2)), "traits": f.get("traits", []), "form": int(f.get("form", 0))}
+	var d := {"id": String(f.get("species_id", "voltberry")), "rip": int(f.get("ripeness", 2)), "traits": f.get("traits", []), "form": int(f.get("form", 0))}
+	if f.has("jam_family"):
+		d["jam_with"] = String(f.get("jam_with", ""))
+	return d
 
 
-static func _unpack_fruit(d: Dictionary) -> Dictionary:
-	return FruitRegistry.create_fruit_instance(StringName(d.get("id", "voltberry")), int(d.get("rip", 2)), d.get("traits", []), int(d.get("form", 0)))
+## Rebuild a fruit (including pantry forms) from its compact save record.
+func _unpack_fruit(d: Dictionary) -> Dictionary:
+	var form := int(d.get("form", 0))
+	var traits: Array = d.get("traits", [])
+	var base := FruitRegistry.create_fruit_instance(StringName(d.get("id", "voltberry")), int(d.get("rip", 2)), traits.filter(func(t): return t != "Hardy" and t != "Juicy"))
+	match form:
+		WindfallTypes.FruitForm.JUICE:
+			return market_manager.make_juice(base)
+		WindfallTypes.FruitForm.DRIED:
+			base["ripeness"] = int(d.get("rip", 2)) + 1
+			return market_manager.make_dried_fruit(base)
+		WindfallTypes.FruitForm.JAM:
+			var other := FruitRegistry.create_fruit_instance(StringName(d.get("jam_with", "voltberry")))
+			return market_manager.make_jam(base, other)
+	return base

@@ -39,6 +39,12 @@ func bake_characters() -> void:
 		"hesper": CharacterPainter.spec_hesper(),
 		"poacher": CharacterPainter.spec_poacher(),
 	}
+	var p2 := CharacterPainter.spec_rootborn()
+	p2["coat"] = WPal.CLOTH_TEAL
+	specs["rootborn_p2"] = p2
+	var p3 := CharacterPainter.spec_rootborn()
+	p3["coat"] = WPal.CLOTH_ROSE
+	specs["rootborn_p3"] = p3
 	for key in specs:
 		_save(_humanoid_sheet(specs[key]), "characters/" + key)
 	_save(CreaturePainter.gnawer_sheet(), "characters/gnawer")
@@ -141,6 +147,10 @@ func bake_props() -> void:
 	_save(PropPainter.beehive(), "props/beehive")
 	_save(PropPainter.reeds(), "props/reeds")
 	_save(PropPainter.stump(), "props/stump")
+	_save(PropPainter.scarecrow(), "props/scarecrow")
+	_save(PropPainter.well(), "props/well")
+	for v in 4:
+		_save(PropPainter.flower_patch(v), "props/flowers_%d" % v)
 	_save(PropPainter.blob_shadow(7, 3), "props/shadow_small")
 	_save(PropPainter.blob_shadow(12, 5), "props/shadow_medium")
 	_save(PropPainter.blob_shadow(22, 8), "props/shadow_large")
@@ -168,6 +178,10 @@ func bake_icons() -> void:
 		_save(IconPainter.element_sigil(fam), "icons/element_%d" % fam, k)
 		_save(IconPainter.fruit_icon(fam), "icons/fruit_%d" % fam, k)
 		_save(IconPainter.seed_icon(fam), "icons/seed_%d" % fam, k)
+	var registry: Node = load("res://scripts/Windfall/FruitRegistry.gd").new()
+	for sid in registry.species.keys():
+		var fam2 := int(registry.species[sid].get("family", 0))
+		_save(SpeciesIconPainter.icon(sid, fam2), "icons/species/%s" % sid, k)
 
 
 func bake_ui() -> void:
@@ -192,6 +206,9 @@ func bake_ui() -> void:
 	_save(UIPainter.harvest_bar(), "ui/harvest_bar")
 	_save(UIPainter.harvest_cursor(), "ui/harvest_cursor")
 	_save(UIPainter.focus_brackets(), "ui/focus")
+	_save(UIPainter.world_hp_frame(), "ui/hp_world_frame")
+	_save(UIPainter.world_hp_fill(), "ui/hp_world_fill")
+	UIPainter.vignette().save_png(ProjectSettings.globalize_path(OUT + "ui/vignette.png"))
 
 
 func bake_fx() -> void:
@@ -212,6 +229,8 @@ func bake_fx() -> void:
 	_save(FxPainter.slash_frames(5, 2.6), "fx/slash_1")
 	_save(FxPainter.slash_frames(4, 1.2), "fx/slash_2")
 	_save(FxPainter.shock_ring(), "fx/ring")
+	_save(FxPainter.butterfly_frames(), "fx/butterfly")
+	_save(FxPainter.ground_ring(), "fx/ground_ring")
 	for fam in 8:
 		_save(FxPainter.projectile(fam), "fx/proj_%d" % fam)
 		_save(FxPainter.quickroot(fam), "fx/quickroot_%d" % fam)

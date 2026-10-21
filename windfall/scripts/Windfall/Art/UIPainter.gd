@@ -205,3 +205,29 @@ static func focus_brackets() -> PixelCanvas:
 			c.px(p[0] + i * p[2], p[1], g)
 			c.px(p[0], p[1] + i * p[3], g)
 	return c
+
+
+## Enemy world HP bar: frame (14x4) and fill (12x2), cropped at runtime.
+static func world_hp_frame() -> PixelCanvas:
+	var c := PixelCanvas.new(14, 4)
+	c.rect(0, 0, 14, 4, WPal.OUTLINE)
+	c.rect(1, 1, 12, 2, Color("2a1e24"))
+	return c
+
+
+static func world_hp_fill() -> PixelCanvas:
+	var c := PixelCanvas.new(12, 2)
+	c.hline(0, 11, 0, WPal.RED[4])
+	c.hline(0, 11, 1, WPal.RED[3])
+	return c
+
+
+## Soft radial vignette (not pixelated on purpose), 256x256.
+static func vignette() -> Image:
+	var img := Image.create(256, 256, false, Image.FORMAT_RGBA8)
+	for y in 256:
+		for x in 256:
+			var d := Vector2((x + 0.5) / 128.0 - 1.0, (y + 0.5) / 128.0 - 0.9).length() / 1.45
+			var a := clampf((d - 0.38) / 0.62, 0.0, 1.0)
+			img.set_pixel(x, y, Color(0.06, 0.03, 0.08, a * a * 0.75))
+	return img

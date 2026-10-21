@@ -28,7 +28,8 @@ func _init() -> void:
 	_text.fit_content = true
 	_text.scroll_active = false
 	_text.custom_minimum_size = Vector2(700, 60)
-	_text.add_theme_font_size_override("normal_font_size", 18)
+	_text.add_theme_font_size_override("normal_font_size", 20)
+	_text.add_theme_font_size_override("bold_font_size", 20)
 	v.add_child(_text)
 	_arrow = UIKit.bold("▼", 16, UITheme.GOLD)
 	_arrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
