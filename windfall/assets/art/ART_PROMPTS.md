@@ -171,6 +171,47 @@ Pixel-art sprite: Windfall farmhouse, 3/4 top-down. Exactly 104×100 pixels, eac
 
 ---
 
+## UI and menu workflow
+
+GPT is the art director and parts supplier. Claude Code is the builder. Every UI asset falls into one of three lanes:
+
+| Lane | What | Who makes it | What GPT gives |
+|---|---|---|---|
+| **Paint** | Icons, portraits, illustrations, corner ornaments, plaques, backgrounds, logo | GPT, dropped in as-is | The finished file |
+| **Structure** | Anything that stretches or holds text: frames, buttons, slots, bars, tabs, pop-up bodies, layout | Claude Code (`UIPainter.gd`, UI scripts) | A mockup, as the target only |
+| **Grid** | World sprites | PixelLab or code painters | Nothing usable |
+
+**The loop for a new or redesigned screen:**
+1. **Mockup.** Screenshot the real screen (`windfall/screenshots/` is refreshed by every playtest), give it to GPT, and use prompt U1. Starting from the real screen keeps the result buildable.
+2. **Spec.** Hand the approved mockup to Claude Code: "implement this screen". It rebuilds the layout and repaints the frames and buttons to match, then sends back an in-game screenshot.
+3. **Parts list.** Claude Code replies with the painted pieces the screen still needs (icons, ornaments, plaques), with filenames and sizes.
+4. **Parts.** Generate each piece with prompts U2–U4, one per image, then drop them in `_incoming/`.
+5. **Integrate and compare.** Claude Code wires the parts in and shows you the in-game screenshot beside the mockup. Repeat steps 4–5 until it matches.
+
+**Never ask GPT for:** a whole screen as a usable asset, 9-slice frames or buttons, anything with text baked in (text is set in-engine so it can change and be translated), or sprite sheets.
+
+### U1 Screen mockup (reference only)
+```
+[Style Lock first] Attached is a real screenshot of Windfall's [SCREEN] at 1280×720. Redesign it in the Windfall style, keeping the SAME layout, the same data and the same number of slots and buttons, so it can be rebuilt in-engine. Show the normal and the hover/selected state of each interactive element. 16:9, no extra labels or annotations.
+```
+
+### U2 Icon (set of N, one image each)
+```
+[Style Lock first] One UI icon: [SUBJECT, e.g. "a red heart for Health"]. It must match the attached icon references (painted pixel-art look, plum outline, light from the top-left, chunky silhouette readable at 24 px). Centred, filling about 85% of a 512×512 canvas, transparent background, no frame, no text, no drop shadow.
+```
+Name each file after its slot in `ART_SPEC.md` (`heart.png`, `element_0.png`…). Make the first one, approve it, then attach it to every later prompt so the set stays consistent.
+
+### U3 Frame corner ornament (overlay on panels)
+```
+[Style Lock first] One decorative corner ornament for a wooden UI frame: [a leafy vine with two white blossoms and a small red apple], curling around a top-left corner. It sits ON TOP of a frame, so draw only the ornament (no frame, no panel), shaped like an L that reaches about 60% along each edge. 512×512, transparent background.
+```
+Claude Code mirrors it to the other corners.
+
+### U4 Plaque / banner (text added in-engine)
+```
+[Style Lock first] One blank wooden plaque for a [quest-complete pop-up]: [mossy plank with a green ribbon and a leaf at each end]. The centre must be EMPTY and flat so text can go on it. Wide format 1024×256, transparent background, no text.
+```
+
 ## Hand-off to Claude Code
 
 Drop new files into `windfall/assets/art/_incoming/` (any names) and say *"integrate the incoming art"*.
