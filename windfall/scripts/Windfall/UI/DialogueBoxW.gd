@@ -2,11 +2,14 @@ extends PanelContainer
 class_name DialogueBoxW
 
 ## Vine-framed dialogue box driven by the template's DialogueManager autoload.
-## Typewriter text, blip sounds, and a bobbing continue marker.
+## Typewriter text, blip sounds, a bobbing continue marker, and the
+## speaker's painted portrait (portraits/<speaker>.png) when one exists.
 
 signal closed
 
 var _name: Label
+var _portrait: PanelContainer
+var _face: TextureRect
 var _text: RichTextLabel
 var _arrow: Label
 var _on_done: Callable
@@ -22,24 +25,42 @@ func _init() -> void:
 	visible = false
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	custom_minimum_size = Vector2(760, 150)
+	var row := UIKit.hbox(14)
+	add_child(row)
+	_portrait = UIKit.panel("PaperPanel")
+	_portrait.custom_minimum_size = Vector2(128, 128)
+	_portrait.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	row.add_child(_portrait)
+	_face = TextureRect.new()
+	_face.custom_minimum_size = Vector2(116, 116)
+	_face.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_face.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	_face.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_portrait.add_child(_face)
 	var v := UIKit.vbox(6)
-	add_child(v)
+	v.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(v)
 	_name = UIKit.header("", 18)
 	v.add_child(_name)
 	_text = RichTextLabel.new()
 	_text.bbcode_enabled = true
 	_text.fit_content = true
 	_text.scroll_active = false
-	_text.custom_minimum_size = Vector2(700, 60)
+	_text.custom_minimum_size = Vector2(560, 60)
 	_text.add_theme_font_size_override("normal_font_size", 20)
 	_text.add_theme_font_size_override("bold_font_size", 20)
 	v.add_child(_text)
 	_choice_box = UIKit.hbox(10)
 	_choice_box.visible = false
 	v.add_child(_choice_box)
+	# the arrow bobs inside its own holder so the VBox never re-seats it
+	var arrow_row := Control.new()
+	arrow_row.custom_minimum_size = Vector2(0, 22)
+	v.add_child(arrow_row)
 	_arrow = UIKit.bold("▼", 16, UITheme.GOLD)
 	_arrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	v.add_child(_arrow)
+	_arrow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	arrow_row.add_child(_arrow)
 
 
 func _ready() -> void:
@@ -56,6 +77,8 @@ func open_with_choices(data: DialogueData, on_choice: Callable) -> void:
 func open(data: DialogueData, on_done: Callable) -> void:
 	_on_done = on_done
 	_choices = data.choices
+	_name.text = ""
+	_set_portrait(data.speaker_name)
 	_choice_box.visible = false
 	visible = true
 	modulate.a = 0.0
@@ -64,10 +87,25 @@ func open(data: DialogueData, on_done: Callable) -> void:
 
 
 func _on_line(speaker: String, text: String) -> void:
+	if speaker != _name.text:
+		_set_portrait(speaker)
 	_name.text = speaker
 	_text.text = text
 	_text.visible_characters = 0
 	_typing = true
+
+
+func _set_portrait(speaker: String) -> void:
+	var path := "portraits/" + speaker.to_lower()
+	var has := ResourceLoader.exists(Art.ROOT + path + ".png")
+	_portrait.visible = has
+	if not has:
+		return
+	_face.texture = Art.tex(path)
+	# a small pop as a new face takes the stage
+	_face.pivot_offset = _face.custom_minimum_size * 0.5
+	_face.scale = Vector2(0.92, 0.92)
+	create_tween().tween_property(_face, "scale", Vector2.ONE, 0.25).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _process(delta: float) -> void:

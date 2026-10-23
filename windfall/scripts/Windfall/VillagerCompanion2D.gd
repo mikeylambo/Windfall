@@ -57,7 +57,7 @@ func _ready() -> void:
 	add_child(_bubble)
 	var dots := Label.new()
 	dots.text = "!"
-	dots.add_theme_font_override("font", load(UITheme.FONT_PATH))
+	dots.add_theme_font_override("font", load(UITheme.FONT_WORLD_PATH))
 	dots.add_theme_font_size_override("font_size", 10)
 	dots.add_theme_color_override("font_color", WPal.OUTLINE)
 	dots.size = Vector2(36, 24)

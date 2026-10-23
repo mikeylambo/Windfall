@@ -1,10 +1,13 @@
 extends Node2D
 
-## Title screen: a living diorama of the homestead behind the WINDFALL logo.
+## Title screen: the painted homestead (day, or night after dark on the
+## player's clock) drifting slowly behind the WINDFALL logo.
 
 const GAME_SCENE := "res://scenes/Windfall/WindfallMain.tscn"
+const DRIFT := 1.06
 
-var _cam: Camera2D
+var _plate: TextureRect
+var _night: bool = false
 var _t: float = 0.0
 var _menu: VBoxContainer
 var _settings: SettingsPanel
@@ -19,103 +22,63 @@ func _ready() -> void:
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 
-	var ground := Node2D.new()
-	add_child(ground)
-	var world := Node2D.new()
-	world.y_sort_enabled = true
-	add_child(world)
+	var hour := int(Time.get_datetime_dict_from_system().get("hour", 12))
+	_night = hour >= 19 or hour < 6
+	var back := CanvasLayer.new()
+	back.layer = -1
+	add_child(back)
+	_plate = TextureRect.new()
+	_plate.texture = Art.tex("ui/title_night" if _night else "ui/title_day")
+	_plate.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+	_plate.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_plate.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_plate.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	back.add_child(_plate)
+	_plate.resized.connect(func(): _plate.pivot_offset = _plate.size * 0.5)
+
 	var overlay := CanvasLayer.new()
 	overlay.layer = 2
-	overlay.follow_viewport_enabled = true
 	add_child(overlay)
-	FX.bind(world, overlay)
-	FX.night = 0.15
-	var dresser := WorldDresser.new()
-	add_child(dresser)
-	dresser.dress(world, ground)
-
-	# an orchard in full fruit, one tree per element
-	var fams := [1, 0, 2, 4, 3, 7]
-	for i in WorldLayout.PLOTS.size():
-		var p: Vector2 = WorldLayout.PLOTS[i]
-		if i >= WorldLayout.STARTING_PLOTS:
-			var wild := Art.sprite("props/overgrown_plot")
-			wild.centered = true
-			wild.offset = Vector2.ZERO
-			wild.position = p + Vector2(0, 6)
-			wild.z_index = -5
-			world.add_child(wild)
-			continue
-		var stage := 6 if i == 3 else 5
-		var trunk := Art.sprite("trees/trunk_%d" % stage, 1, 1, Vector2(48, 120))
-		trunk.position = p
-		world.add_child(trunk)
-		var crown := Art.sprite("trees/canopy_%d_%d" % [stage, fams[i]], 1, 1, Vector2(48, 120))
-		crown.material = Art.sway_material(1.2, i * 1.7)
-		trunk.add_child(crown)
-		var soil := Art.sprite("world/soil_%d" % (i % 6))
-		soil.centered = true
-		soil.offset = Vector2.ZERO
-		soil.position = Vector2(0, 6)
-		soil.z_index = -5
-		trunk.add_child(soil)
-		for k in 4:
-			var f := Art.sprite("trees/fruit_%d" % fams[i], 4, 1)
-			f.centered = true
-			f.offset = Vector2.ZERO
-			f.position = OrchardPlot2D.FRUIT_SPOTS[stage][k]
-			trunk.add_child(f)
-		if stage == 6:
-			FX.glow(trunk, WPal.element(fams[i], 3), 90.0, Vector2(0, -80), 0.5, 0.5)
-
-	var mod := CanvasModulate.new()
-	mod.color = DayLighting.sample(0.6)
-	add_child(mod)
-
-	_cam = Camera2D.new()
-	_cam.zoom = Vector2(1.5, 1.5)
-	_cam.position = Vector2(820, 560)
-	add_child(_cam)
-	_cam.make_current()
-
 	_add_ambient_particles(overlay)
 	_build_ui()
 	WindfallSound.start_ambience()
-	WindfallSound.set_ambience_night(false)
+	WindfallSound.set_ambience_night(_night)
 	WindfallSound.prewarm()
 
 
 func _add_ambient_particles(overlay: CanvasLayer) -> void:
+	var view := get_viewport().get_visible_rect().size
 	var leaves := CPUParticles2D.new()
 	leaves.texture = Art.tex("fx/leaf")
-	leaves.amount = 24
-	leaves.lifetime = 8.0
+	leaves.amount = 8 if _night else 20
+	leaves.lifetime = 9.0
 	leaves.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	leaves.emission_rect_extents = Vector2(800, 10)
-	leaves.position = Vector2(820, 200)
+	leaves.emission_rect_extents = Vector2(view.x * 0.6, 10)
+	leaves.position = Vector2(view.x * 0.5, -20)
 	leaves.direction = Vector2(0.4, 1)
 	leaves.gravity = Vector2(10, 18)
 	leaves.initial_velocity_min = 10
 	leaves.initial_velocity_max = 30
 	leaves.angular_velocity_min = -90
 	leaves.angular_velocity_max = 90
-	leaves.scale_amount_min = 1.5
-	leaves.scale_amount_max = 2.5
-	leaves.preprocess = 8.0
+	leaves.scale_amount_min = 2.0
+	leaves.scale_amount_max = 3.0
+	leaves.preprocess = 9.0
 	overlay.add_child(leaves)
 	var flies := CPUParticles2D.new()
 	flies.texture = Art.glow_texture()
-	flies.amount = 30
+	flies.amount = 40 if _night else 18
 	flies.lifetime = 5.0
 	flies.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
-	flies.emission_rect_extents = Vector2(700, 300)
-	flies.position = Vector2(820, 600)
+	flies.emission_rect_extents = Vector2(view.x * 0.5, view.y * 0.25)
+	flies.position = Vector2(view.x * 0.5, view.y * 0.72)
 	flies.gravity = Vector2(0, -4)
 	flies.initial_velocity_min = 4
 	flies.initial_velocity_max = 14
 	flies.spread = 180
-	flies.scale_amount_min = 0.12
-	flies.scale_amount_max = 0.22
+	flies.scale_amount_min = 0.1
+	flies.scale_amount_max = 0.2
 	flies.color = WPal.GOLD[4]
 	var g := Gradient.new()
 	g.set_color(0, Color(1, 1, 1, 0))
@@ -201,7 +164,10 @@ func _build_ui() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
-	_cam.position = Vector2(820 + sin(_t * 0.07) * 260.0, 540 + sin(_t * 0.05) * 60.0)
+	# slow Ken Burns drift: a gentle zoom-in with a lazy sideways sway
+	var z := DRIFT + 0.02 * sin(_t * 0.05)
+	_plate.scale = Vector2(z, z)
+	_plate.position = Vector2(sin(_t * 0.04) * 18.0, cos(_t * 0.03) * 6.0)
 	if _logo:
 		_logo.position.y = sin(_t * 1.4) * 3.0
 

@@ -3,8 +3,8 @@ class_name UIKit
 
 ## Tiny builder helpers so every WINDFALL menu is assembled the same way.
 
-const BOLD := preload("res://assets/fonts/Jersey10.woff2")
-const TITLE := preload("res://assets/fonts/Jersey15.woff2")
+const BOLD := preload("res://assets/fonts/PixelifySans-Bold.woff2")
+const TITLE := preload("res://assets/fonts/PixelifySans-Bold.woff2")
 
 const TOOL_NAMES := ["Pruning Shears", "Scythe", "Hoe-Staff", "Seed Sling", "Watering Can"]
 const TOOL_DESC := ["Fast twin snips. Prunes trees for better fruit.", "Wide sweeping arc.", "Heavy ground slam with shockwave.", "Ranged seed pellets.", "Waters plots; soaks enemies (Wet)."]

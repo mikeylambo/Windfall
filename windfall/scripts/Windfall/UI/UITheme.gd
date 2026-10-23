@@ -5,25 +5,27 @@ class_name UITheme
 ## tools/bake_art.gd saves it to res://assets/ui/windfall_theme.tres, which is
 ## set as the project-wide custom theme so every Control uses it.
 
-## Jersey 10 (body/HUD, 10px grid) and Jersey 15 (display, 15px grid), both OFL.
-## Sizes are always snapped to integer multiples of the design grid so every
-## glyph lands on whole pixels; never pass a raw size to a font override.
-const FONT_PATH := "res://assets/fonts/Jersey10.woff2"
-const FONT_BOLD_PATH := "res://assets/fonts/Jersey10.woff2"
-const FONT_TITLE_PATH := "res://assets/fonts/Jersey15.woff2"
+## Pixelify Sans SemiBold (body/HUD) and Bold (display), both OFL, imported
+## without antialiasing. Sizes are always snapped to the sizes that keep the
+## pixel strokes even; never pass a raw size to a font override.
+## World-space text stays on Jersey 10, whose 10px grid survives the 2x camera.
+const FONT_PATH := "res://assets/fonts/PixelifySans-SemiBold.woff2"
+const FONT_BOLD_PATH := "res://assets/fonts/PixelifySans-Bold.woff2"
+const FONT_TITLE_PATH := "res://assets/fonts/PixelifySans-Bold.woff2"
+const FONT_WORLD_PATH := "res://assets/fonts/Jersey10.woff2"
 
 
-## Snap a requested UI body size to the Jersey 10 grid (20, 30, 40...).
+## Snap a requested UI body size to 20 or a multiple of 4 above it (20, 24, 28...).
 static func body_px(requested: int) -> int:
-	return maxi(20, int(round(requested / 10.0)) * 10)
+	return maxi(20, int(round(requested / 4.0)) * 4)
 
 
-## Snap a requested display size to the Jersey 15 grid (30, 45, 60, 90...).
+## Snap a requested display size to the 16px grid (32, 48, 64, 96...).
 static func display_px(requested: int) -> int:
-	return maxi(30, int(round(requested / 15.0)) * 15)
+	return maxi(32, int(round(requested / 16.0)) * 16)
 
 
-## World-space text is magnified 2x by the camera, so use the native grid.
+## World-space text is magnified 2x by the camera, so use Jersey's native grid.
 static func world_px(requested: int) -> int:
 	return 10 if requested < 20 else 20
 
