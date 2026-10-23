@@ -6,12 +6,12 @@
 [ext_resource type="Texture2D" path="res://assets/art/ui/button_0.png" id="4_xu1tj"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/panel_dark.png" id="5_b7ri7"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/keycap.png" id="6_62xw2"]
-[ext_resource type="FontFile" path="res://assets/fonts/PixelifySans-Bold.woff2" id="7_p117j"]
+[ext_resource type="FontFile" path="res://assets/fonts/PixelifySans-Bold-JD.ttf" id="7_p117j"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/panel_wood.png" id="8_lo367"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/panel_paper.png" id="9_jks8a"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/slot_0.png" id="11_yment"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/slot_1.png" id="12_ksn0g"]
-[ext_resource type="FontFile" path="res://assets/fonts/PixelifySans-SemiBold.woff2" id="13_po1p6"]
+[ext_resource type="FontFile" path="res://assets/fonts/PixelifySans-SemiBold-JD.ttf" id="13_po1p6"]
 [ext_resource type="Texture2D" path="res://assets/art/ui/panel_vine.png" id="13_wyvvl"]
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_rdkim"]
@@ -115,15 +115,15 @@ border_width_bottom = 3
 border_color = Color(0.16470589, 0.11372549, 0.15294118, 1)
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_ksn0g"]
-content_margin_left = 24.0
-content_margin_top = 24.0
-content_margin_right = 24.0
-content_margin_bottom = 24.0
+content_margin_left = 27.0
+content_margin_top = 27.0
+content_margin_right = 27.0
+content_margin_bottom = 27.0
 texture = ExtResource("8_lo367")
-texture_margin_left = 21.0
-texture_margin_top = 21.0
-texture_margin_right = 21.0
-texture_margin_bottom = 21.0
+texture_margin_left = 30.0
+texture_margin_top = 30.0
+texture_margin_right = 30.0
+texture_margin_bottom = 30.0
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_wyvvl"]
 content_margin_left = 10.0
@@ -255,15 +255,15 @@ content_margin_right = 4.0
 bg_color = Color(0.11764706, 0.078431375, 0.09411765, 1)
 
 [sub_resource type="StyleBoxTexture" id="StyleBoxTexture_nvk3f"]
-content_margin_left = 24.0
-content_margin_top = 24.0
-content_margin_right = 24.0
-content_margin_bottom = 24.0
+content_margin_left = 27.0
+content_margin_top = 27.0
+content_margin_right = 27.0
+content_margin_bottom = 27.0
 texture = ExtResource("13_wyvvl")
-texture_margin_left = 21.0
-texture_margin_top = 21.0
-texture_margin_right = 21.0
-texture_margin_bottom = 21.0
+texture_margin_left = 30.0
+texture_margin_top = 30.0
+texture_margin_right = 30.0
+texture_margin_bottom = 30.0
 
 [resource]
 default_font = ExtResource("13_po1p6")

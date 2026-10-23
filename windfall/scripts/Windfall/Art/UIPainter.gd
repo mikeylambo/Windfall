@@ -4,48 +4,135 @@ class_name UIPainter
 ## 9-slice panels and widget skins. Baked at 3x (UI texel = 3 screen px).
 
 
-## Wooden frame panel 24x24 (9-slice margins 7 texels).
+## Wooden frame panel 32x32 (9-slice margins 10 texels): a bevelled dark-oak
+## band with brass corner brackets around a plum interior. Edges are uniform
+## along their length so 9-slice stretching never smears them; all ornament
+## lives in the corners.
+const FRAME := 7
+
+
 static func panel_wood() -> PixelCanvas:
-	var c := PixelCanvas.new(24, 24, 1)
-	c.shade_box(0, 0, 24, 24, WPal.WOOD.slice(1, 6))
-	for y in [0, 23]:
-		c.hline(1, 22, y, WPal.OUTLINE)
-	for x in [0, 23]:
-		c.vline(x, 1, 22, WPal.OUTLINE)
-	c.hline(2, 21, 1, WPal.WOOD[5])
-	c.hline(2, 21, 22, WPal.WOOD[1])
-	# inner parchment
-	c.rect(5, 5, 14, 14, Color("2a1e22"))
-	c.rect(6, 6, 12, 12, Color("3a2a2c"))
-	c.hline(6, 17, 6, Color("4a3638"))
-	# nails
-	for p in [Vector2i(2, 2), Vector2i(21, 2), Vector2i(2, 21), Vector2i(21, 21)]:
-		c.px(p.x, p.y, WPal.GOLD[3])
+	var c := PixelCanvas.new(32, 32, 1)
+	var n := 32
+	var band: Array = [WPal.WOOD[1], WPal.WOOD[4], WPal.WOOD[3], WPal.WOOD[3], WPal.WOOD[2], WPal.WOOD[2], WPal.WOOD[1]]
+	# the band: each ring is one tone, lit from the top-left (light top/left, shade bottom/right)
+	for i in FRAME:
+		var lit: Color = band[i]
+		var shade: Color = band[i].darkened(0.28) if i > 0 else band[i]
+		c.hline(i, n - 1 - i, i, lit)
+		c.vline(i, i, n - 1 - i, lit)
+		c.hline(i, n - 1 - i, n - 1 - i, shade)
+		c.vline(n - 1 - i, i, n - 1 - i, shade)
+	# plank seam halfway through the band
+	for i in range(3, n - 3):
+		c.px(i, 3, WPal.WOOD[2].darkened(0.1))
+		c.px(3, i, WPal.WOOD[2].darkened(0.1))
+		c.px(i, n - 4, WPal.WOOD[1])
+		c.px(n - 4, i, WPal.WOOD[1])
+	_ring(c, 0, n, WPal.OUTLINE)
+	_ring(c, FRAME - 1, n - 2 * (FRAME - 1), WPal.OUTLINE)
+	# plum interior with an inset shadow along the top and left
+	c.rect(FRAME, FRAME, n - 2 * FRAME, n - 2 * FRAME, Color("33242c"))
+	c.hline(FRAME, n - 1 - FRAME, FRAME, Color("1f161c"))
+	c.vline(FRAME, FRAME, n - 1 - FRAME, Color("1f161c"))
+	c.hline(FRAME + 1, n - 2 - FRAME, FRAME + 1, Color("2a1e25"))
+	# brass corner brackets with a rivet
+	for corner in 4:
+		_bracket(c, corner, n)
 	return c
 
 
-## Vine-wrapped panel for the Codex / dialogue.
+static func _ring(c: PixelCanvas, at: int, size: int, col: Color) -> void:
+	c.hline(at, at + size - 1, at, col)
+	c.hline(at, at + size - 1, at + size - 1, col)
+	c.vline(at, at, at + size - 1, col)
+	c.vline(at + size - 1, at, at + size - 1, col)
+
+
+## An L-shaped brass cap over one corner. corner: 0 TL, 1 TR, 2 BL, 3 BR.
+static func _bracket(c: PixelCanvas, corner: int, n: int) -> void:
+	var fx := corner % 2 == 1
+	var fy := corner >= 2
+	var g: Array = WPal.GOLD
+	# drawn for the top-left corner, then mirrored
+	var cells := {}
+	for i in 7:
+		for j in 3:
+			cells[Vector2i(i, j)] = true
+			cells[Vector2i(j, i)] = true
+	for p in cells:
+		var x: int = n - 1 - p.x if fx else p.x
+		var y: int = n - 1 - p.y if fy else p.y
+		var edge: bool = p.x == 6 or p.y == 6 or (p.x == 2 and p.y > 2) or (p.y == 2 and p.x > 2)
+		var col: Color = WPal.OUTLINE if (p.x == 0 or p.y == 0) else (g[1] if edge else g[2])
+		c.px(x, y, col)
+	# highlight on the lit edges, rivet in the elbow
+	for i in range(1, 6):
+		c.px(n - 1 - i if fx else i, n - 2 if fy else 1, g[3] if not fy else g[1])
+		c.px(n - 2 if fx else 1, n - 1 - i if fy else i, g[3] if not fx else g[1])
+	var rx := n - 3 if fx else 2
+	var ry := n - 3 if fy else 2
+	c.px(rx, ry, g[4])
+	c.px(rx + (-1 if fx else 1), ry + (-1 if fy else 1), g[0])
+
+
+## Vine-wrapped panel for the Codex / dialogue: the wood frame with leaf
+## clusters and a white blossom on the top-left and bottom-right corners.
 static func panel_vine() -> PixelCanvas:
 	var c := panel_wood()
-	var leaf: Array = WPal.LEAF
-	for i in 24:
-		if i % 5 == 0:
-			c.px(i, 0, leaf[3])
-			c.px(i, 1, leaf[4])
-			c.px(0, i, leaf[3])
-			c.px(23, (i + 2) % 24, leaf[3])
-	c.px(3, 1, leaf[4])
-	c.px(4, 0, leaf[3])
+	_leaves(c, false)
+	_leaves(c, true)
 	return c
+
+
+static func _leaves(c: PixelCanvas, mirror: bool) -> void:
+	var n := 32
+	var lf: Array = WPal.LEAF
+	# leaf: [x, y, dir] in top-left space; dir 0 points right, 1 points down
+	# every pixel must stay within x, y < 10
+	var leaves := [[6, 0, 0], [6, 3, 0], [0, 6, 1], [3, 6, 1], [5, 5, 0]]
+	for l in leaves:
+		var pts: Array = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(1, -1), Vector2i(1, 1), Vector2i(3, 0)]
+		for k in pts.size():
+			var o: Vector2i = pts[k] if l[2] == 0 else Vector2i(pts[k].y, pts[k].x)
+			var x: int = l[0] + o.x
+			var y: int = l[1] + o.y
+			if mirror:
+				x = n - 1 - x
+				y = n - 1 - y
+			var col: Color = lf[4] if k == 3 else (lf[2] if k == 4 else lf[3])
+			if k == 5:
+				col = lf[1]
+			c.px(x, y, col)
+	# the vine stem tying them together (kept inside the 10-texel corner,
+	# anything past it would be stretched along the edge by the 9-slice)
+	for i in range(4, 9):
+		var a := Vector2i(i, 2 + int(i % 3 == 0))
+		var b := Vector2i(2 + int(i % 3 == 0), i)
+		for p in [a, b]:
+			c.px(n - 1 - p.x if mirror else p.x, n - 1 - p.y if mirror else p.y, lf[1])
+	# a five-petal blossom in the corner
+	var cx := n - 5 if mirror else 4
+	var cy := n - 5 if mirror else 4
+	for o in [Vector2i(0, -1), Vector2i(-1, 0), Vector2i(1, 0), Vector2i(0, 1)]:
+		c.px(cx + o.x, cy + o.y, WPal.WHITE)
+	for o in [Vector2i(-1, -1), Vector2i(1, -1), Vector2i(-1, 1), Vector2i(1, 1)]:
+		c.px(cx + o.x, cy + o.y, WPal.CREAM[1])
+	c.px(cx, cy, WPal.GOLD[3])
 
 
 ## Parchment inset for lists and tooltips (12x12, margins 4).
 static func panel_paper() -> PixelCanvas:
 	var c := PixelCanvas.new(12, 12)
-	c.rect(1, 1, 10, 10, WPal.CREAM[2])
-	c.hline(1, 10, 1, WPal.CREAM[3])
-	c.hline(1, 10, 10, WPal.CREAM[1])
-	c.outline(WPal.WOOD[1], 1.0)
+	c.rect(0, 0, 12, 12, WPal.WOOD[1])
+	c.rect(1, 1, 10, 10, WPal.CREAM[1])
+	c.rect(2, 2, 8, 8, WPal.CREAM[2])
+	c.hline(2, 9, 2, WPal.CREAM[3])
+	c.vline(2, 2, 9, WPal.CREAM[3])
+	for p in [Vector2i(0, 0), Vector2i(11, 0), Vector2i(0, 11), Vector2i(11, 11)]:
+		c.erase(p.x, p.y)
+	for p in [Vector2i(1, 1), Vector2i(10, 1), Vector2i(1, 10), Vector2i(10, 10)]:
+		c.px(p.x, p.y, WPal.WOOD[1])
 	return c
 
 
@@ -58,37 +145,56 @@ static func panel_dark() -> PixelCanvas:
 	return c
 
 
-## Item slot frames (20x20, margins 5).
+## Item slot frames (20x20, margins 5): a bevelled rim around an inset well.
+## 0 normal, 1 selected (gold, with corner brackets), 2 element-lit, 3 locked.
 static func slot(state: int) -> PixelCanvas:
 	var c := PixelCanvas.new(20, 20)
-	var rim: Color = [WPal.WOOD[2], WPal.GOLD[3], WPal.ELEMENT[5][2], WPal.STONE[1]][state]
+	var ramp: Array = [WPal.WOOD, WPal.GOLD, WPal.ELEMENT[5], WPal.STONE][state]
+	var lit: Color = ramp[4] if state == 0 else ramp[3]
+	var mid: Color = ramp[2]
+	var dark: Color = ramp[1]
 	c.rect(0, 0, 20, 20, WPal.OUTLINE)
-	c.rect(1, 1, 18, 18, rim)
-	c.rect(2, 2, 16, 16, Color("2a1e24"))
-	c.rect(3, 3, 14, 14, Color("362830"))
-	c.hline(3, 16, 3, Color("44323a"))
+	c.rect(1, 1, 18, 18, mid)
+	c.hline(1, 18, 1, lit)
+	c.vline(1, 1, 18, lit)
+	c.hline(1, 18, 18, dark)
+	c.vline(18, 1, 18, dark)
+	c.rect(2, 2, 16, 16, mid)
+	_ring(c, 3, 14, WPal.OUTLINE)
+	# the well: darkest under the top-left lip, catching light at the bottom-right
+	c.rect(4, 4, 12, 12, Color("2e2229"))
+	c.hline(4, 15, 4, Color("1a1217"))
+	c.vline(4, 4, 15, Color("1a1217"))
+	c.hline(5, 15, 15, Color("3d2e36"))
+	c.vline(15, 5, 15, Color("3d2e36"))
 	if state == 1:
-		for p in [Vector2i(1, 1), Vector2i(18, 1), Vector2i(1, 18), Vector2i(18, 18)]:
+		for p in [Vector2i(0, 0), Vector2i(19, 0), Vector2i(0, 19), Vector2i(19, 19)]:
 			c.px(p.x, p.y, WPal.GOLD[4])
+		for i in 3:
+			c.px(1 + i, 1, WPal.GOLD[4])
+			c.px(1, 1 + i, WPal.GOLD[4])
 	return c
 
 
 ## Buttons 16x12 (margins 4): 0 normal, 1 hover/focus, 2 pressed, 3 disabled.
+## A bevelled plank: lit top and left rims, a 2-texel lip below, brass studs on hover.
 static func button(state: int) -> PixelCanvas:
 	var c := PixelCanvas.new(16, 12)
-	var ramp: Array = [WPal.WOOD.slice(2, 6), WPal.CLOTH_OCHRE.slice(1, 5), WPal.WOOD.slice(1, 4), WPal.STONE.slice(1, 4)][state]
+	var ramp: Array = [WPal.WOOD.slice(1, 6), WPal.CLOTH_OCHRE, WPal.WOOD.slice(0, 5), WPal.STONE][state]
 	var top := 1 if state == 2 else 0
 	c.rect(0, top, 16, 12 - top, WPal.OUTLINE)
 	# flat body so 9-slice stretching stays clean; bevel lives in the margins
-	c.rect(1, top + 1, 14, 9 - top, ramp[2])
-	c.hline(1, 14, top + 1, ramp[ramp.size() - 1])
-	c.hline(2, 13, top + 2, ramp[3] if ramp.size() > 3 else ramp[2])
+	c.rect(1, top + 1, 14, 10 - top, ramp[2])
+	c.hline(1, 14, top + 1, ramp[4])
+	c.hline(2, 13, top + 2, ramp[3])
+	c.vline(1, top + 2, 9, ramp[3])
+	c.vline(14, top + 2, 9, ramp[1])
 	if state != 2:
-		c.hline(1, 14, 10, ramp[0].darkened(0.3))
+		c.hline(1, 14, 10, ramp[0])
 		c.hline(1, 14, 9, ramp[1])
 	if state == 1:
-		c.px(1, 1, WPal.GOLD[4])
-		c.px(14, 1, WPal.GOLD[4])
+		for p in [Vector2i(2, 2), Vector2i(13, 2), Vector2i(2, 8), Vector2i(13, 8)]:
+			c.px(p.x, p.y, WPal.GOLD[4])
 	return c
 
 

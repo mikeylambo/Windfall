@@ -6,12 +6,13 @@ class_name UITheme
 ## set as the project-wide custom theme so every Control uses it.
 
 ## Pixelify Sans SemiBold (body/HUD) and Bold (display), both OFL, imported
-## without antialiasing. Sizes are always snapped to the sizes that keep the
+## without antialiasing. Their digits are swapped for Jersey 10's (Pixelify's
+## "5" reads as an S) by tools/fonts/merge_digits.js, hence the -JD files. Sizes are always snapped to the sizes that keep the
 ## pixel strokes even; never pass a raw size to a font override.
 ## World-space text stays on Jersey 10, whose 10px grid survives the 2x camera.
-const FONT_PATH := "res://assets/fonts/PixelifySans-SemiBold.woff2"
-const FONT_BOLD_PATH := "res://assets/fonts/PixelifySans-Bold.woff2"
-const FONT_TITLE_PATH := "res://assets/fonts/PixelifySans-Bold.woff2"
+const FONT_PATH := "res://assets/fonts/PixelifySans-SemiBold-JD.ttf"
+const FONT_BOLD_PATH := "res://assets/fonts/PixelifySans-Bold-JD.ttf"
+const FONT_TITLE_PATH := "res://assets/fonts/PixelifySans-Bold-JD.ttf"
 const FONT_WORLD_PATH := "res://assets/fonts/Jersey10.woff2"
 
 
@@ -61,14 +62,14 @@ static func build() -> Theme:
 	t.default_font_size = 20
 
 	# panels: 3x baked, 7-texel margins on the wood frame
-	var wood := box("ui/panel_wood", 21, 24)
+	var wood := box("ui/panel_wood", 30, 27)
 	t.set_stylebox("panel", "PanelContainer", wood)
 	t.set_stylebox("panel", "Panel", wood)
 	t.set_stylebox("panel", "PopupPanel", wood)
 	t.set_stylebox("panel", "TooltipPanel", box("ui/panel_dark", 12, 10))
 
 	t.set_type_variation("VinePanel", "PanelContainer")
-	t.set_stylebox("panel", "VinePanel", box("ui/panel_vine", 21, 24))
+	t.set_stylebox("panel", "VinePanel", box("ui/panel_vine", 30, 27))
 	t.set_type_variation("PaperPanel", "PanelContainer")
 	t.set_stylebox("panel", "PaperPanel", box("ui/panel_paper", 12, 10))
 	t.set_type_variation("DarkPanel", "PanelContainer")
