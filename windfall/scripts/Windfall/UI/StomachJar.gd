@@ -87,6 +87,7 @@ func rebuild(player: RootbornPlayer) -> void:
 			var fam := int(f.get("family", 0))
 			var col := WPal.element(fam, 3)
 			ic.texture = Art.tex(Art.species_icon(f.get("species_id", &"")))
+			UIKit.smooth_if_hires(ic)
 			ring.tint_progress = col
 			glow.modulate = Color(col, 0.55)
 			key.self_modulate = col.lightened(0.45)

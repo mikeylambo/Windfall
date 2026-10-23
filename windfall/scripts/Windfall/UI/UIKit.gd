@@ -39,12 +39,20 @@ static func header(text: String, size: int = 24, color: Color = UITheme.GOLD) ->
 static func icon(path: String, px: int = 48, tint: Color = Color.WHITE) -> TextureRect:
 	var r := TextureRect.new()
 	r.texture = Art.tex(path)
+	smooth_if_hires(r)
 	r.custom_minimum_size = Vector2(px, px)
 	r.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	r.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	r.modulate = tint
 	r.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	return r
+
+
+## Painted illustrations (species art, logo) are stored large and drawn smaller,
+## so they need smooth mipmapped sampling. Pixel art stays nearest-filtered.
+static func smooth_if_hires(r: TextureRect) -> void:
+	var hires := r.texture != null and r.texture.get_width() >= 128
+	r.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS if hires else CanvasItem.TEXTURE_FILTER_PARENT_NODE
 
 
 static func panel(variation: String = "") -> PanelContainer:

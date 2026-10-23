@@ -6,6 +6,8 @@ class_name CodexMenu
 
 var _grid: GridContainer
 var _detail: RichTextLabel
+var _art: TextureRect
+var _head: RichTextLabel
 var _tree_view: VBoxContainer
 var _species_view: HBoxContainer
 var _count: Label
@@ -46,13 +48,26 @@ func build() -> void:
 	var right := UIKit.panel("PaperPanel")
 	right.custom_minimum_size = Vector2(300, 0)
 	_species_view.add_child(right)
+	var col := UIKit.vbox(4)
+	right.add_child(col)
+	var head := UIKit.hbox(10)
+	col.add_child(head)
+	_art = TextureRect.new()
+	_art.custom_minimum_size = Vector2(84, 84)
+	_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	head.add_child(_art)
+	_head = _rich(Vector2(186, 0))
+	_head.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_head.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	head.add_child(_head)
 	_detail = RichTextLabel.new()
 	_detail.bbcode_enabled = true
 	_detail.fit_content = true
-	_detail.custom_minimum_size = Vector2(280, 300)
+	_detail.custom_minimum_size = Vector2(280, 230)
 	_detail.add_theme_color_override("default_color", UITheme.OUTLINE)
 	_detail.add_theme_constant_override("outline_size", 0)
-	right.add_child(_detail)
+	col.add_child(_detail)
 
 	_tree_view = UIKit.vbox(10)
 	_tree_view.visible = false
@@ -67,6 +82,16 @@ func _discovered() -> Dictionary:
 
 
 const SILHOUETTE := preload("res://assets/shaders/silhouette.gdshader")
+
+
+func _rich(min_size: Vector2) -> RichTextLabel:
+	var r := RichTextLabel.new()
+	r.bbcode_enabled = true
+	r.fit_content = true
+	r.custom_minimum_size = min_size
+	r.add_theme_color_override("default_color", UITheme.OUTLINE)
+	r.add_theme_constant_override("outline_size", 0)
+	return r
 
 
 func _silhouette(c: CanvasItem) -> void:
@@ -132,16 +157,26 @@ func _build_grid() -> void:
 func _show(sid: StringName, known: bool) -> void:
 	var sp := FruitRegistry.get_species(sid)
 	var fam := int(sp.get("family", 0))
+	_art.texture = Art.tex(Art.species_icon(sid))
+	UIKit.smooth_if_hires(_art)
+	if known:
+		_art.material = null
+	else:
+		_silhouette(_art)
 	if not known:
 		var par := _hybrid_parents(sid)
 		if not par.is_empty():
-			_detail.text = "[b]??? Hybrid[/b]\n[color=#6b4430]%s + %s[/color]\n\nPlant these two families side by side and let spring pollen do the rest." % [UIKit.FAMILY_NAMES[par[0]], UIKit.FAMILY_NAMES[par[1]]]
+			_head.text = "[b]??? Hybrid[/b]\n[color=#6b4430]%s + %s[/color]" % [UIKit.FAMILY_NAMES[par[0]], UIKit.FAMILY_NAMES[par[1]]]
+			_detail.text = "Plant these two families side by side and let spring pollen do the rest."
 		else:
-			_detail.text = "[b]???[/b]\n[color=#6b4430]%s family[/color]\n\nUndiscovered. Forage the wilds, buy seeds, or cross-pollinate in spring." % UIKit.FAMILY_NAMES[fam]
+			_head.text = "[b]???[/b]\n[color=#6b4430]%s family[/color]" % UIKit.FAMILY_NAMES[fam]
+			_detail.text = "Undiscovered. Forage the wilds, buy seeds, or cross-pollinate in spring."
 		return
-	_detail.text = "[b][color=#%s]%s[/color][/b]\n[color=#6b4430]%s · %s · prefers %s[/color]\n\n[b]%s[/b] (%s)\n%s\n\nDamage %d · Cooldown %.1fs\nDigests %ds · %d slot(s)\n\n[color=#6b4430]Quickroot: %s[/color]" % [
+	_head.text = "[b][color=#%s]%s[/color][/b]\n[color=#6b4430]%s · %s\nprefers %s[/color]" % [
 		WPal.element(fam, 1).to_html(false), sp.get("name"), UIKit.FAMILY_NAMES[fam], sp.get("flavor", ""),
-		UIKit.SOIL_NAMES[int(sp.get("soil_pref", 0))], sp.get("skill_name"), UIKit.SKILL_TYPES[int(sp.get("skill_type", 0))],
+		UIKit.SOIL_NAMES[int(sp.get("soil_pref", 0))]]
+	_detail.text = "[b]%s[/b] (%s)\n%s\n\nDamage %d · Cooldown %.1fs\nDigests %ds · %d slot(s)\n\n[color=#6b4430]Quickroot: %s[/color]" % [
+		sp.get("skill_name"), UIKit.SKILL_TYPES[int(sp.get("skill_type", 0))],
 		sp.get("skill_desc", ""), int(sp.get("base_damage", 0)), float(sp.get("cooldown", 0)),
 		int(sp.get("digestion_duration", 0)), int(sp.get("slots", 1)), sp.get("quickroot_desc", "")]
 	var pl: RootbornPlayer = hud.get("player") if hud else null

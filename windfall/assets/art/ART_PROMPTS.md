@@ -2,6 +2,24 @@
 
 Written after reviewing GPT batches 1–10. Read this before generating more art.
 
+## Status (after the "New Batch Update")
+
+| Item | Status |
+|---|---|
+| T1 logo | **In game** (`ui/logo`, title screen) |
+| Batch 1 fruit + X1 hybrids | **In game**: all 37 species art, 128 px painted (Codex, satchel, stomach, market) |
+| C1 Rootborn + P2/P3 | **Approved**: the canonical hero. Saved in `/art_reference/rootborn/` |
+| C2 portraits | **Approved** (Rootborn, Wren, Hesper, Poacher, Reaper) in `/art_reference/portraits/`. Waiting on a dialogue-portrait feature |
+| T2 title plates (day/night) | **Approved** in `/art_reference/title/`. Not wired in: the title is currently a live in-engine diorama |
+| S1 trees via GPT | **Stopped: not viable.** See below |
+
+### Why GPT can't do native sprites (the S1 test)
+GPT doesn't honour a pixel grid: the "48×64 at 16 px per block" canopy came out about 68×90 blocks of irregular size,
+the three-stage image changed scale and leaf style between stages, and it drew the canopy top-down, not 3/4.
+Snapped to 48×64 it turns noisy and loses its silhouette. Every native sprite would need repainting by hand,
+which costs more than drawing it. **Rule:** GPT does painted, non-grid art (logo, illustrations, portraits, key art).
+Everything on the world grid goes to PixelLab or the code painters.
+
 ## What the existing batches are good for
 
 The batches are concept sheets, not game assets. GPT draws "pixel-look" art at about 3–4× the game's real
@@ -105,9 +123,12 @@ One fruit illustration in exactly the style of the attached sheet: [HYBRID] — 
 
 ---
 
-## Priority 2: native-size sprites (GPT with grid rules, or PixelLab)
+## Priority 2: native-size sprites → PixelLab, not GPT
 
-Each prompt below targets an exact `ART_SPEC.md` size. Keep the wording "hard square blocks, no anti-aliasing".
+The S1/S4 GPT prompts below are kept for reference only. Do them in **PixelLab** instead, using its
+"style reference" with the approved art: canopy prompt → *Create image*, 48×64 canvas,
+"3/4 top-down orchard tree canopy, no trunk", family SHAPE from the table, palette lock on.
+Make the Storm canopy first, then reuse it as the style reference for the other 7 so they match.
 
 ### S1 `trees/canopy_5_<fam>.png`: mature canopies (do Storm `0` first as the test)
 ```

@@ -70,6 +70,8 @@ Single sprites anchored at base-centre (bottom-middle), except `shadow_*`, which
 16×16 texels → **48×48 px**: tools `tool_0..4` (Shears, Scythe, Hoe-Staff, Sling, Watering Can),
 `element_<fam>`, `seed_<fam>`, `fruit_<fam>` (family fallback), `season_0..3`, plus misc HUD icons.
 `icons/species/<species_id>`: one per species (Codex, satchel, stomach, market). The species id must match `FruitRegistry`.
+**Exception:** species art is a painted illustration at **128×128**, transparent, imported with mipmaps. UI draws any
+texture 128 px or wider with smooth filtering (`UIKit.smooth_if_hires`), so it stays crisp at 24–84 px.
 
 ## UI: `ui/` (3×, 9-slice)
 
@@ -85,6 +87,7 @@ Single sprites anchored at base-centre (bottom-middle), except `shadow_*`, which
 | `keycap`, `chip` | 12×12, 12×10 | 9 |
 | `harvest_bar`, `harvest_cursor`, `focus`, `bubble`, `hp_world_*` | world-space, 2× | |
 | `vignette` | 256×256 soft alpha | |
+| `logo` | 1200×510 painted, mipmapped (title screen) | |
 
 Theme wiring lives in `scripts/Windfall/UI/UITheme.gd`, saved to `assets/ui/windfall_theme.tres`.
 
@@ -270,43 +273,8 @@ Not art (by design): chain-lightning bolts are `Line2D` geometry, and fades/menu
 | `icons/tool_2` | 48×48 |
 | `icons/tool_3` | 48×48 |
 | `icons/tool_4` | 48×48 |
-| `icons/species/ashdate` | 48×48 |
-| `icons/species/bramblequince` | 48×48 |
-| `icons/species/briarcherry` | 48×48 |
-| `icons/species/brinemelon` | 48×48 |
-| `icons/species/cinderapple` | 48×48 |
-| `icons/species/coral_fig` | 48×48 |
-| `icons/species/cyclone_citrus` | 48×48 |
-| `icons/species/dawnpeach` | 48×48 |
-| `icons/species/duskberry` | 48×48 |
-| `icons/species/eclipse_cherry` | 48×48 |
-| `icons/species/featherfig` | 48×48 |
-| `icons/species/forgefruit` | 48×48 |
-| `icons/species/glacier_gourd` | 48×48 |
-| `icons/species/glacier_grape` | 48×48 |
-| `icons/species/halo_apricot` | 48×48 |
-| `icons/species/halo_thorns` | 48×48 |
-| `icons/species/hollow_fig` | 48×48 |
-| `icons/species/icicle_plum` | 48×48 |
-| `icons/species/ironnut` | 48×48 |
-| `icons/species/lumen_lychee` | 48×48 |
-| `icons/species/mistlime` | 48×48 |
-| `icons/species/nightplum` | 48×48 |
-| `icons/species/phoenix_pomegranate` | 48×48 |
-| `icons/species/plasma_plum` | 48×48 |
-| `icons/species/rimepear` | 48×48 |
-| `icons/species/riptide_mango` | 48×48 |
-| `icons/species/scorchpeach` | 48×48 |
-| `icons/species/snowquince` | 48×48 |
-| `icons/species/sparkfig` | 48×48 |
-| `icons/species/squall_berry` | 48×48 |
-| `icons/species/starfruit` | 48×48 |
-| `icons/species/stormglass_lemon` | 48×48 |
-| `icons/species/thunderplum` | 48×48 |
-| `icons/species/vine_apple` | 48×48 |
-| `icons/species/voltberry` | 48×48 |
-| `icons/species/wraith_kiwi` | 48×48 |
-| `icons/species/zephyr_kiwi` | 48×48 |
+| `icons/species/*` (37) | 128×128 |
+| `ui/logo` | 1200×510 |
 | `ui/bar_frame` | 96×24 |
 | `ui/bar_gold` | 12×18 |
 | `ui/bar_hp` | 12×18 |

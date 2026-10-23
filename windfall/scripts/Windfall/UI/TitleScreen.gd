@@ -153,20 +153,15 @@ func _build_ui() -> void:
 	center.add_child(col)
 
 	_logo = UIKit.vbox(0)
-	var logo := UIKit.header("WINDFALL", 88, UITheme.GOLD)
-	logo.add_theme_constant_override("outline_size", 18)
-	logo.add_theme_color_override("font_shadow_color", Color(0.1, 0.05, 0.1, 0.6))
-	logo.add_theme_constant_override("shadow_offset_x", 0)
-	logo.add_theme_constant_override("shadow_offset_y", 8)
-	logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	# the painted logo already carries the "Skill-Tree Gardening" plank
+	var logo := UIKit.icon("ui/logo", 0)
+	logo.custom_minimum_size = Vector2(560, 238)
 	_logo.add_child(logo)
-	var sub := UIKit.bold("~ Skill-Tree Gardening ~", 22, Color("c2e078"))
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_logo.add_child(sub)
 	var sprout := HBoxContainer.new()
 	sprout.alignment = BoxContainer.ALIGNMENT_CENTER
-	for fam in 8:
-		sprout.add_child(UIKit.icon("icons/fruit_%d" % fam, 30))
+	# one signature fruit per family, in family order
+	for sid in [&"voltberry", &"cinderapple", &"snowquince", &"brinemelon", &"vine_apple", &"zephyr_kiwi", &"eclipse_cherry", &"starfruit"]:
+		sprout.add_child(UIKit.icon(Art.species_icon(sid), 38))
 	_logo.add_child(sprout)
 	col.add_child(_logo)
 	col.add_child(UIKit.spacer(0, 20))
@@ -196,7 +191,7 @@ func _build_ui() -> void:
 	foot.position = Vector2(-16, -12)
 	root.add_child(foot)
 
-	_logo.pivot_offset = Vector2(260, 60)
+	_logo.pivot_offset = Vector2(280, 140)
 	_logo.modulate.a = 0.0
 	_logo.scale = Vector2(0.9, 0.9)
 	var t := create_tween().set_parallel(true)
