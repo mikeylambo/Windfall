@@ -1,0 +1,184 @@
+[gd_scene load_steps=15 format=3 uid="uid://c7k0x2w94a1fl"]
+
+[ext_resource type="Script" path="res://scripts/Windfall/WindfallMain.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/Windfall/RootbornPlayer.gd" id="2_player"]
+[ext_resource type="Script" path="res://scripts/Windfall/OrchardPlot2D.gd" id="3_plot"]
+[ext_resource type="Script" path="res://scripts/Windfall/DayCycleManager.gd" id="4_day"]
+[ext_resource type="Script" path="res://scripts/Windfall/MarketManager.gd" id="5_market"]
+[ext_resource type="Script" path="res://scripts/Windfall/UI/WindfallHUD.gd" id="6_hud"]
+[ext_resource type="Script" path="res://scripts/Windfall/MarketStallProp.gd" id="7_stall"]
+[ext_resource type="Script" path="res://scripts/Windfall/BedProp.gd" id="8_bed"]
+[ext_resource type="Script" path="res://scripts/Windfall/VillagerCompanion2D.gd" id="9_villager"]
+[ext_resource type="Script" path="res://scripts/Windfall/ExpeditionZone.gd" id="10_exped"]
+[ext_resource type="Script" path="res://scripts/Windfall/ExpeditionGate.gd" id="11_gate"]
+[ext_resource type="Script" path="res://scripts/Windfall/World/DayLighting.gd" id="12_light"]
+[ext_resource type="Script" path="res://scripts/Windfall/World/CameraRig.gd" id="13_cam"]
+[ext_resource type="Script" path="res://scripts/Windfall/CompostBin.gd" id="14_compost"]
+
+[node name="WindfallMain" type="Node2D"]
+script = ExtResource("1_main")
+
+[node name="Ground" type="Node2D" parent="."]
+z_index = -20
+
+[node name="World" type="Node2D" parent="."]
+y_sort_enabled = true
+
+[node name="Bed" type="Area2D" parent="World" node_paths=PackedStringArray("day_manager")]
+position = Vector2(520, 416)
+script = ExtResource("8_bed")
+day_manager = NodePath("../../DayCycleManager")
+
+[node name="MarketStall" type="Area2D" parent="World" node_paths=PackedStringArray("market_manager")]
+position = Vector2(400, 650)
+script = ExtResource("7_stall")
+market_manager = NodePath("../../MarketManager")
+
+[node name="Gate" type="Area2D" parent="World" node_paths=PackedStringArray("day_manager")]
+position = Vector2(1150, 492)
+script = ExtResource("11_gate")
+day_manager = NodePath("../../DayCycleManager")
+
+[node name="OrchardGrid" type="Node2D" parent="World"]
+y_sort_enabled = true
+
+[node name="Plot_0" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(720, 400)
+script = ExtResource("3_plot")
+plot_index = 0
+soil_type = 4
+tree_stage = 5
+planted_species_id = &"voltberry"
+fruit_count = 3
+current_ripeness = 2
+
+[node name="Plot_1" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(840, 400)
+script = ExtResource("3_plot")
+plot_index = 1
+soil_type = 1
+tree_stage = 4
+planted_species_id = &"cinderapple"
+
+[node name="Plot_2" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(960, 400)
+script = ExtResource("3_plot")
+plot_index = 2
+soil_type = 2
+tree_stage = 2
+planted_species_id = &"rimepear"
+
+[node name="Plot_3" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(720, 580)
+script = ExtResource("3_plot")
+plot_index = 3
+soil_type = 3
+tree_stage = 6
+planted_species_id = &"briarcherry"
+fruit_count = 4
+current_ripeness = 2
+
+[node name="Plot_4" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(840, 580)
+script = ExtResource("3_plot")
+plot_index = 4
+soil_type = 0
+
+[node name="Plot_5" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(960, 580)
+script = ExtResource("3_plot")
+plot_index = 5
+soil_type = 5
+
+[node name="Plot_6" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(720, 750)
+script = ExtResource("3_plot")
+plot_index = 6
+soil_type = 1
+locked = true
+
+[node name="Plot_7" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(840, 750)
+script = ExtResource("3_plot")
+plot_index = 7
+soil_type = 3
+locked = true
+
+[node name="Plot_8" type="Area2D" parent="World/OrchardGrid"]
+position = Vector2(960, 750)
+script = ExtResource("3_plot")
+plot_index = 8
+soil_type = 2
+locked = true
+
+[node name="CompostBin" type="Area2D" parent="World"]
+position = Vector2(610, 580)
+script = ExtResource("14_compost")
+
+[node name="Wren" type="CharacterBody2D" parent="World"]
+position = Vector2(600, 640)
+script = ExtResource("9_villager")
+villager_name = "Wren"
+village_job = "Watch"
+combat_role = "Rogue"
+loved_flavor = "Sour"
+hated_flavor = "Sweet"
+
+[node name="Hesper" type="CharacterBody2D" parent="World"]
+position = Vector2(1130, 830)
+script = ExtResource("9_villager")
+villager_name = "Hesper"
+village_job = "Beekeeper"
+combat_role = "Support"
+loved_flavor = "Sweet"
+hated_flavor = "Bitter"
+
+[node name="ExpeditionZone" type="Node2D" parent="World"]
+y_sort_enabled = true
+position = Vector2(1560, 140)
+script = ExtResource("10_exped")
+
+[node name="Player" type="CharacterBody2D" parent="World"]
+position = Vector2(560, 500)
+script = ExtResource("2_player")
+
+[node name="Camera2D" type="Camera2D" parent="World/Player" groups=["main_camera"]]
+position = Vector2(0, -16)
+zoom = Vector2(2, 2)
+script = ExtResource("13_cam")
+limit_left = 0
+limit_top = 0
+limit_right = 2560
+limit_bottom = 1536
+position_smoothing_enabled = true
+position_smoothing_speed = 7.0
+
+[node name="DayCycleManager" type="Node" parent="."]
+script = ExtResource("4_day")
+
+[node name="NightModulate" type="CanvasModulate" parent="."]
+color = Color(1, 0.98, 0.92, 1)
+
+[node name="DayLighting" type="Node" parent="."]
+script = ExtResource("12_light")
+modulate_path = NodePath("../NightModulate")
+
+[node name="MarketManager" type="Node" parent="."]
+script = ExtResource("5_market")
+
+[node name="FXOverlay" type="CanvasLayer" parent="."]
+layer = 2
+follow_viewport_enabled = true
+
+[node name="HUDLayer" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="WindfallHUD" type="Control" parent="HUDLayer" groups=["hud"]]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("6_hud")
