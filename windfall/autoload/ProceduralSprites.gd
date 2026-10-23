@@ -52,13 +52,23 @@ func sprite(path: String, hframes: int = 1, vframes: int = 1, foot := Vector2.ZE
 	return s
 
 
-## Character sprite using the shared 20x26 texel humanoid frame (2x baked).
+## Character sprite from a 4-column x 20-row sheet (see ROWS). The frame size comes from the
+## texture, so baked 40x52 sheets and painted 64x64 sheets both work. Feet sit 1/26 of the
+## frame height above its bottom edge (texel row FY of the baked 20x26 frame).
 func actor_sprite(sheet: String) -> Sprite2D:
-	var s := sprite("characters/" + sheet, 4, 20, Vector2(CharacterPainter.CX * 2, (CharacterPainter.FY + 1) * 2))
+	var t := tex("characters/" + sheet)
+	var fw := t.get_width() / 4.0 if t else CharacterPainter.FW * 2.0
+	var fh := t.get_height() / 20.0 if t else CharacterPainter.FH * 2.0
+	var s := sprite("characters/" + sheet, 4, 20, Vector2(round(fw * 0.5), fh - round(fh / CharacterPainter.FH)))
 	var m := ShaderMaterial.new()
 	m.shader = ACTOR_SHADER
 	s.material = m
 	return s
+
+
+## Height of one actor frame above the feet, in pixels (unscaled). For placing bars and popups.
+func actor_height(s: Sprite2D) -> float:
+	return -s.offset.y
 
 
 func shadow(size: String = "small") -> Sprite2D:

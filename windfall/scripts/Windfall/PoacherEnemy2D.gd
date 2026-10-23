@@ -366,9 +366,11 @@ func _setup_visuals() -> void:
 	_hp_bar = Art.sprite("ui/hp_world_frame")
 	_hp_bar.centered = true
 	_hp_bar.offset = Vector2.ZERO
-	_hp_bar.position = Vector2(0, -52 if not gnawer else -38)
+	# Baked 40x52 frames: 50 px tall, bar at -52 (gnawer -38, elite at 1.5x -84).
+	var h := Art.actor_height(body_sprite)
+	_hp_bar.position = Vector2(0, -(h + 2.0) if not gnawer else -(h - 12.0))
 	if is_elite():
-		_hp_bar.position.y = -84
+		_hp_bar.position.y = -(h * 1.5 + 9.0)
 	_hp_bar.z_index = 30
 	add_child(_hp_bar)
 	_hp_fill = Art.sprite("ui/hp_world_fill")
